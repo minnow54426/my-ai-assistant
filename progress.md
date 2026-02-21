@@ -124,3 +124,84 @@ Message → Build Context → Call LLM → Execute Tools → Format Response
 | Error | Resolution |
 |-------|------------|
 |       |            |
+
+---
+
+## Session 3 - Build Tool Interface & Registry
+**Date:** 2025-02-20
+**Phase:** Phase 1 - Extract & Run (Implementation)
+**Objective:** Build tool interface and registry using TDD
+
+### Completed
+- [x] Write tests for Tool interface (RED phase)
+- [x] Implement Tool interface (GREEN phase)
+- [x] Write tests for ToolRegistry (RED phase)
+- [x] Implement ToolRegistry (GREEN phase)
+- [x] Create 3 built-in tools (echo, get-time, file-list)
+- [x] Write and pass tests for built-in tools
+- [x] Verify all tests pass (23 tests total)
+
+### What We Built
+
+**Tool Interface:**
+```typescript
+interface Tool<T, R> {
+  name: string;
+  description: string;
+  parameters: ToolParameterSchema;
+  execute: (params: T) => Promise<R>;
+}
+```
+
+**ToolRegistry:**
+- `register(tool)` - Add tool to registry
+- `get(name)` - Retrieve tool by name
+- `execute(name, params)` - Execute tool
+- `list()` - List all tools
+- `listNames()` - Get tool names
+
+**Built-in Tools:**
+- `echo` - Testing tool that echoes messages
+- `get-time` - Returns current timestamp
+- `file-list` - Lists files in directory
+
+### Test Results
+- Tool system tests: 9 passed
+- Built-in tools tests: 8 passed
+- GLM client tests: 6 passed
+- **Total: 23 tests passed**
+
+### Files Created
+- `src/agent/tools.ts` - Tool interface and registry (108 lines)
+- `src/agent/built-in-tools.ts` - 3 built-in tools (143 lines)
+- `src/agent/tools.test.ts` - Tool system tests (152 lines)
+- `src/agent/built-in-tools.test.ts` - Built-in tools tests (98 lines)
+
+### TDD Experience
+**What worked well:**
+- Tests guided the implementation
+- Caught type errors early
+- Confirmed code works as expected
+- No over-engineering
+
+**Challenges:**
+- Had to adjust generic types in ToolRegistry
+- Initial type constraints were too strict
+
+### Current Status
+**Phase:** Tool system complete, ready for agent executor
+**Next Step:** Build agent executor that uses tools and GLM client
+
+### Git Commits
+```
+bef3cda Implement tool interface and registry with TDD
+e7d2c09 Document OpenClaw agent system exploration findings
+95ff2ce Add planning files for Phase 1 implementation
+```
+
+### Key Learnings
+- Tools are simpler than expected
+- TypeScript generics provide excellent type safety
+- TDD prevents over-engineering
+- Start with 2-3 tools to learn the pattern
+

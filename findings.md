@@ -191,3 +191,60 @@ my-assistant/
 ✅ **How are tools defined?** Interface with schema and execute function
 ✅ **How does agent decide?** LLM function calling with tool descriptions
 ✅ **Simplest way to test?** CLI with single message execution
+
+---
+
+## [Session 2] Building Tool System with TDD
+**Date:** 2025-02-20
+
+### Discovery: Tool System Simplicity
+
+**What We Built:**
+```typescript
+interface Tool<T, R> {
+  name: string;
+  description: string;
+  parameters: ToolParameterSchema;
+  execute: (params: T) => Promise<R>;
+}
+```
+
+**Key Insights:**
+1. **Tools are simple** - Just a name, description, parameters, and execute function
+2. **Registry pattern** - Map-based registry for managing tools
+3. **Type safety** - Generics allow type-safe parameter passing and results
+4. **JSON Schema** - Using simple JSON schema for parameters (simpler than TypeBox)
+
+**Tools Created:**
+- `echo` - Returns message (for testing)
+- `get-time` - Returns current timestamp
+- `file-list` - Lists files in directory
+
+**TDD Process Worked:**
+1. Wrote test → Saw it fail (RED)
+2. Wrote minimal code → Saw it pass (GREEN)
+3. No refactoring needed yet
+
+**Test Results:** 17 tests pass (9 for tool system, 8 for built-in tools)
+
+### Comparison with OpenClaw
+
+| Aspect | OpenClaw | Our Implementation |
+|--------|----------|-------------------|
+| Interface | `AgentTool<T,R>` from pi-agent-core | Simple `Tool<T,R>` interface |
+| Parameters | TypeBox schemas | JSON Schema (simpler) |
+| Registry | Complex with workspace discovery | Simple Map-based |
+| Tools | Many built-in | 3 simple tools to start |
+
+### Lessons Learned
+- **Simpler is better for learning** - We don't need TypeBox yet
+- **TypeScript generics are powerful** - Type-safe tool execution
+- **TDD prevents over-engineering** - Tests told us when we had enough
+- **Start small** - 3 tools is enough to understand the concept
+
+### Files Created
+- `src/agent/tools.ts` - Tool interface and registry
+- `src/agent/built-in-tools.ts` - 3 simple tools
+- `src/agent/tools.test.ts` - Tool system tests
+- `src/agent/built-in-tools.test.ts` - Built-in tools tests
+
