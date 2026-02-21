@@ -46,14 +46,17 @@ export const echoTool: Tool<{ message: string }, string> = {
  */
 export const getTimeTool: Tool<{}, string> = {
   name: "get-time",
-  description: "Returns the current date and time",
+  description: "Returns the current date and time in Beijing timezone (UTC+8)",
   parameters: {
     type: "object",
     properties: {},
     required: [],
   },
   execute: async () => {
-    return new Date().toISOString();
+    const now = new Date();
+    // Convert to Beijing time (UTC+8)
+    const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+    return beijingTime.toISOString().replace('Z', '') + ' (Beijing Time, UTC+8)';
   },
 };
 
