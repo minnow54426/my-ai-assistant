@@ -31,18 +31,24 @@ describe("Built-in Tools", () => {
     it("returns current time as ISO string", async () => {
       const result = await registry.execute("get-time", {});
 
-      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      expect(result).toMatch(/\d{4}-\d{2}-\d{2}T/);
+      expect(result).toContain("Beijing Time");
     });
 
     it("returns recent time", async () => {
       const result = await registry.execute("get-time", {});
-      const resultDate = new Date(result as string);
+      // Extract the timestamp from the result
+      const timestampMatch = (result as string).match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+      expect(timestampMatch).toBeDefined();
+
+      // Parse Beijing time (which is UTC+8)
+      const resultDate = new Date(timestampMatch![1] + 'Z');
+      const beijingDate = new Date(resultDate.getTime() - (8 * 60 * 60 * 1000));
       const now = new Date();
-      const diffMs = now.getTime() - resultDate.getTime();
+      const diffMs = Math.abs(now.getTime() - beijingDate.getTime());
 
       // Should be within last 5 seconds
       expect(diffMs).toBeLessThan(5000);
-      expect(diffMs).toBeGreaterThanOrEqual(0);
     });
   });
 

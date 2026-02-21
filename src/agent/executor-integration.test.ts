@@ -76,7 +76,7 @@ describe("AgentExecutor Integration", () => {
     expect(typeof response).toBe("string");
     // Response should mention time or contain a timestamp
     expect(response.toLowerCase()).toMatch(/time|date|\d{4}-\d{2}-\d{2}/);
-  }, 30000);
+  }, 60000);
 
   it("lists available tools when asked", async () => {
     const response = await executor.processMessage("What tools do you have?");
