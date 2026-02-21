@@ -9,9 +9,15 @@ episode: 1
 
 ## Introduction
 
-Today I dove into the tool system - the foundation that gives our AI agent its capabilities. When I started this project, I barely knew TypeScript, and concepts like "generics" seemed intimidating. But after building and testing this system, generics finally clicked for me.
+Today I dove into the tool system - the foundation that gives our AI agent its capabilities.
 
-In this episode, I'll break down how the tool system works, why TypeScript generics are so powerful, and what I learned when I tried to break it.
+When I started this project, I barely knew TypeScript. I'd used JavaScript before, but TypeScript felt like "JavaScript with extra homework." Concepts like "generics" seemed intimidating - lots of angle brackets and type variables that made my eyes glaze over.
+
+But here's the thing: after building and testing this system, **generics finally clicked for me**.
+
+I remember the moment clearly. I was struggling to understand why the code wasn't working, so I added some debug logging. TypeScript immediately showed me an error: "Property 'message' is missing." I thought, "Wait, TypeScript knows what my tool needs before I even run the code?" That's when it clicked - generics aren't complexity, they're **clarity**.
+
+In this episode, I'll break down how the tool system works, why TypeScript generics are so powerful (and not scary), and what I learned from the bugs I found along the way.
 
 ## Background
 
@@ -243,6 +249,105 @@ await tools.execute("non-existent", {});
 
 **What I learned:** The registry throws a clear error when a tool doesn't exist. This makes debugging easy - I immediately know the problem.
 
+## Real Bugs I Encountered
+
+During development, I hit several bugs that taught me important lessons:
+
+### Bug #1: The Regex That Broke Tool Detection
+
+**The Problem:**
+When I first tested the agent, it wouldn't use the `get-time` tool. The LLM would say "Using tool: get-time with params: {}" but nothing happened!
+
+**The Investigation:**
+I added debug logging to trace what was happening:
+```typescript
+console.log('[DEBUG] LLM Response:', response.content);
+// Output: "Using tool: get-time with params: {}"
+console.log('[DEBUG] Tool call detected:', toolCall);
+// Output: undefined
+```
+
+The tool call was returning `undefined`!
+
+**The Bug:**
+```typescript
+// In executor.ts, the parsing regex:
+const toolPattern = /Using tool:\s*(\w+)\s+with params:\s*(\{.*\})/i;
+```
+
+`\w+` matches word characters (a-z, A-Z, 0-9, _) but **not hyphens!**
+
+So tool names like `get-time` and `file-list` were never detected.
+
+**The Fix:**
+```typescript
+// Changed to:
+const toolPattern = /Using tool:\s*([\w-]+)\s+with params:\s*(\{.*\})/i;
+//                            ^^^^^^ Added hyphen support
+```
+
+**Lesson:** Always test your regex patterns with your actual data, not made-up examples!
+
+### Bug #2: The Timezone Confusion
+
+**The Problem:**
+The agent showed UTC time but I'm in Beijing (UTC+8). When I asked "What time is it?", it showed 1:41 AM but it was actually 9:41 AM!
+
+**The Investigation:**
+```typescript
+// Original code:
+return new Date().toISOString();  // Returns UTC
+// Output: "2026-02-21T01:41:00.000Z"
+```
+
+**The Fix:**
+```typescript
+const now = new Date();
+// Add 8 hours for Beijing time (UTC+8)
+const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+return beijingTime.toISOString().replace('Z', '') + ' (Beijing Time, UTC+8)';
+```
+
+**Lesson:** Always consider timezone! Users expect their local time, not UTC.
+
+### Bug #3: The File-List That Found Nothing
+
+**The Problem:**
+I asked the agent to "List TypeScript files in src" and it said: "I don't see any TypeScript files... The directory appears to be empty."
+
+But I knew there were 17 `.ts` files!
+
+**The Investigation:**
+```typescript
+// Tool was only looking at top-level directory
+const entries = await fs.readdir(targetDir, { withFileTypes: true });
+let files = entries
+  .filter((entry) => entry.isFile())
+  .map((entry) => entry.name);
+```
+
+The `.ts` files were in subdirectories: `src/agent/`, `src/llm/`, etc.
+
+**The Fix:**
+Made the search recursive by default:
+```typescript
+if (recursive) {
+  // Recurse into all subdirectories
+  const getAllFiles = async (dir: string, baseDir: string) => {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await getAllFiles(fullPath, baseDir);  // Recurse!
+      } else if (entry.isFile()) {
+        files.push(relativePath);
+      }
+    }
+  };
+}
+```
+
+**Lesson:** When working with file systems, think about directory structures!
+
 ## Key Takeaways
 
 After breaking and studying the tool system, here's what stuck:
@@ -273,15 +378,19 @@ After breaking and studying the tool system, here's what stuck:
 
 ## What Surprised Me
 
-1. **How simple the registry is** - It's just a Map! No complex logic needed.
+1. **How simple the registry is** - It's just a Map! No complex logic needed. I expected something much more complicated.
 
-2. **TypeScript generics make sense now** - I used to think they were complex, but they're just type placeholders.
+2. **TypeScript generics make sense now** - I used to think they were complex, but they're just type placeholders. My "aha!" moment was when I saw TypeScript catch a bug before I even ran the code - that's when it clicked.
 
-3. **The tests were easy to write** - Because the types are clear, I knew exactly what to test.
+3. **The tests were easy to write** - Because the types are clear, I knew exactly what to test. I wrote the test first, watched it fail (the "RED" phase), then wrote the code. It felt strange at first, but it actually worked!
 
-4. **Async is default** - Everything is async. This feels natural for I/O operations.
+4. **Async is default** - Everything is async. This feels natural for I/O operations. I don't even think about it anymore.
 
-5. **TDD actually worked** - Writing tests first helped me understand the interface before implementing.
+5. **TDD actually worked** - Writing tests first helped me understand the interface before implementing. It prevented me from going down wrong paths.
+
+6. **Bugs were teaching moments** - Each bug I fixed taught me something important: regex matching, timezones, directory traversal. I learned more from fixing bugs than from writing perfect code the first time.
+
+7. **It took less time than expected** - I built the whole tool system in about 4-6 hours, including tests. I thought it would take days!
 
 ## Next Steps
 
