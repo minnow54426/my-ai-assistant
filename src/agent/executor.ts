@@ -64,7 +64,13 @@ export class AgentExecutor {
         const toolResult = await this.tools.execute(toolCall.name, toolCall.params);
 
         // Send result back to LLM for final response
-        const followUpPrompt = `${prompt}\n\nI used the ${toolCall.name} tool and got: ${JSON.stringify(toolResult)}\n\nPlease provide a helpful response to the user.`;
+        // IMPORTANT: Tell the LLM NOT to repeat the tool call, just respond with the result
+        const followUpPrompt = `You just used the ${toolCall.name} tool and got this result: ${JSON.stringify(toolResult)}
+
+Please provide a helpful, natural response to the user's question using this information.
+Do NOT mention using a tool or repeat the tool call format. Just answer naturally.
+
+User's question: ${message}`;
         const finalResponse = await this.llmClient.sendMessage(followUpPrompt);
 
         return finalResponse.content;
@@ -110,7 +116,8 @@ Always explain what you're doing before using a tool.`;
    */
   private parseToolCall(response: string): { name: string; params: Record<string, unknown> } | undefined {
     // Pattern: "Using tool: <name> with params: <json>"
-    const toolPattern = /Using tool:\s*(\w+)\s+with params:\s*(\{.*\})/i;
+    // Tool names can contain hyphens (e.g., get-time, file-list)
+    const toolPattern = /Using tool:\s*([\w-]+)\s+with params:\s*(\{.*\})/i;
     const match = response.match(toolPattern);
 
     if (match) {
