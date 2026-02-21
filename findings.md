@@ -248,3 +248,110 @@ interface Tool<T, R> {
 - `src/agent/tools.test.ts` - Tool system tests
 - `src/agent/built-in-tools.test.ts` - Built-in tools tests
 
+
+---
+
+## [Session 4] Building Agent Executor
+**Date:** 2025-02-20
+
+### Discovery: How Agents Decide What to Do
+
+**The Core Flow:**
+```
+User Message → Agent → LLM (with tools) → Agent → Tool → Result → LLM → User
+```
+
+**Key Components:**
+1. **System Prompt** - Tells LLM what tools are available
+2. **Tool Call Detection** - Parse LLM response for tool usage
+3. **Tool Execution** - Run the tool with parameters
+4. **Response Generation** - Send result back to LLM for final answer
+
+**Implementation Insights:**
+
+**Tool Call Format:**
+```
+"Using tool: <name> with params: <json>"
+```
+
+**Example:**
+```
+LLM: "Using tool: echo with params: {"message":"hello"}"
+Agent: Executes echo tool
+Agent: Sends result to LLM: "I echoed 'hello' for you. The result was: Echo: hello"
+LLM: Returns final response to user
+```
+
+**Simple Parsing Works:**
+- Used regex: `/Using tool:\s*(\w+)\s+with params:\s*(\{.*\})/i`
+- No complex function calling needed (yet!)
+- GLM-4.6 understands the format well
+
+### Test Results
+- Unit tests: 8 passed
+- Integration tests: 5 passed (with real GLM API!)
+- **Total: 36 tests passing**
+
+### Integration Test Highlights
+
+**Test 1: Simple Message**
+```
+User: "Hello! What's your name?"
+Agent: Responds without using tools
+```
+
+**Test 2: Echo Tool**
+```
+User: "Please echo the message: Hello World"
+LLM: "Using tool: echo with params: {"message":"Hello World"}"
+Tool: Returns "Echo: Hello World"
+Agent: Final response with echoed message
+```
+
+**Test 3: Get-Time Tool**
+```
+User: "What time is it?"
+LLM: "Using tool: get-time with params: {}"
+Tool: Returns timestamp
+Agent: Explains the time to user
+```
+
+**Test 4: List Tools**
+```
+User: "What tools do you have?"
+Agent: Lists all 3 tools with descriptions
+```
+
+**Test 5: Error Handling**
+```
+User: "List files in /nonexistent/directory"
+Tool: Throws error
+Agent: Handles gracefully, explains error
+```
+
+### Key Learnings
+
+1. **LLMs Can Follow Simple Patterns** - No complex protocol needed
+2. **Two-Step Process Works** - LLM decision → Tool execution → LLM final response
+3. **Error Handling Critical** - Tools fail, agent must handle gracefully
+4. **Integration Tests Essential** - Unit tests pass, but real API tests show truth
+
+### Comparison with OpenClaw
+
+| Aspect | OpenClaw | Our Implementation |
+|--------|----------|-------------------|
+| Tool Calling | Complex function calling protocol | Simple text pattern |
+| Multi-step | Conversational multi-turn | Two-step (decide + respond) |
+| Complexity | High (sessions, workspaces) | Low (stateless) |
+| Learning | Hard to understand | Easy to grasp |
+
+### Files Created
+- `src/agent/executor.ts` - Agent executor (160 lines)
+- `src/agent/executor.test.ts` - Unit tests (139 lines)
+- `src/agent/executor-integration.test.ts` - Integration tests (102 lines)
+
+### Phase 1 Status
+✅ Tool system complete
+✅ Agent executor complete
+⏳ CLI interface (next)
+
