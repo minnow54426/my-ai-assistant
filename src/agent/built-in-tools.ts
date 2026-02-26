@@ -1,23 +1,10 @@
-/**
- * Built-in Tools for the Agent
- *
- * Simple tools to demonstrate the tool system:
- * - echo: Returns what you send (for testing)
- * - get-time: Returns current time
- * - file-list: Lists files in a directory
- */
-
 import * as fs from "fs/promises";
 import * as path from "path";
-import { Tool } from "./tools";
-
-// ============================================================================
-// Echo Tool
-// ============================================================================
+import type { Tool } from "./tools";
 
 /**
  * Echo tool - returns the message sent to it
- * Useful for testing the tool system
+ * Simple tool for testing
  */
 export const echoTool: Tool<{ message: string }, string> = {
   name: "echo",
@@ -37,12 +24,8 @@ export const echoTool: Tool<{ message: string }, string> = {
   },
 };
 
-// ============================================================================
-// Get Time Tool
-// ============================================================================
-
 /**
- * Get time tool - returns the current date and time
+ * Get-time tool - returns current time in Beijing timezone (UTC+8)
  */
 export const getTimeTool: Tool<{}, string> = {
   name: "get-time",
@@ -54,102 +37,66 @@ export const getTimeTool: Tool<{}, string> = {
   },
   execute: async () => {
     const now = new Date();
-    // Convert to Beijing time (UTC+8)
+
+    // Add 8 hours to convert UTC to Beijing time
     const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    return beijingTime.toISOString().replace('Z', '') + ' (Beijing Time, UTC+8)';
+
+    // Format: "2026-02-21T09:41:00.123 (Beijing Time, UTC+8)"
+    return beijingTime.toISOString().replace("Z", "") + " (Beijing Time, UTC+8)";
   },
 };
 
-// ============================================================================
-// File List Tool
-// ============================================================================
-
 /**
- * File list tool - lists files in a directory
+ * File-list tool - lists files in a directory recursively with optional pattern matching
  */
 export const fileListTool: Tool<
   { directory?: string; pattern?: string; recursive?: boolean },
   { directory: string; files: string[]; count: number }
 > = {
   name: "file-list",
-  description: "Lists files in a directory. Recursively searches subdirectories by default. Optionally filter by pattern.",
+  description:
+    "Lists files in a directory recursively, with optional pattern matching",
   parameters: {
     type: "object",
     properties: {
       directory: {
         type: "string",
-        description: "Directory path (defaults to current directory)",
+        description: "Directory to list files from (defaults to current directory)",
       },
       pattern: {
         type: "string",
-        description: "Optional glob pattern to filter files (e.g., '*.ts', '**/*.js')",
+        description: "Glob pattern to filter files (e.g., '*.ts' for TypeScript files)",
       },
       recursive: {
         type: "boolean",
-        description: "Search recursively in subdirectories (default: true)",
+        description: "Whether to search recursively (defaults to true)",
       },
     },
     required: [],
   },
   execute: async (params) => {
-    const targetDir = params.directory || process.cwd();
-    const recursive = params.recursive !== false; // Default to true
+    const targetDir = params.directory || ".";
+    const recursive = params.recursive !== undefined ? params.recursive : true;
+    const files: string[] = [];
 
     try {
-      let files: string[] = [];
+      // Convert glob pattern to regex
+      const pattern = params.pattern || "*";
+      const regex = globToRegex(pattern);
 
       if (recursive) {
-        // Recursively find all files
-        const getAllFiles = async (dir: string, baseDir: string): Promise<void> => {
-          const entries = await fs.readdir(dir, { withFileTypes: true });
-
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            const relativePath = path.relative(baseDir, fullPath);
-
-            if (entry.isDirectory()) {
-              // Recurse into subdirectories
-              await getAllFiles(fullPath, baseDir);
-            } else if (entry.isFile()) {
-              files.push(relativePath);
+        // Recursive search
+        await getAllFiles(targetDir, targetDir, files, regex);
+      } else {
+        // Non-recursive - only top-level files
+        const entries = await fs.readdir(targetDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile()) {
+            if (regex.test(entry.name)) {
+              files.push(entry.name);
             }
           }
-        };
-
-        await getAllFiles(targetDir, targetDir);
-      } else {
-        // Only top-level files
-        const entries = await fs.readdir(targetDir, { withFileTypes: true });
-        files = entries
-          .filter((entry) => entry.isFile())
-          .map((entry) => entry.name);
-      }
-
-      // Apply pattern filter if provided
-      if (params.pattern) {
-        // Convert glob pattern to regex
-        // Support patterns: *.ts, **/*.ts, **/*.js, etc.
-        let regexPattern = params.pattern
-
-          // Handle **/* (match any path)
-          .replace(/\*\*\/\*/g, '.*')
-
-          // Handle ** (match any directories)
-          .replace(/\*\*/g, '.*')
-
-          // Escape special regex characters except * and ?
-          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-
-          // * (in middle) -> match any chars except slash (one directory level)
-          // * (at start) -> match any chars including slashes (recursive)
-          .replace(/^\*/g, '.*')
-          .replace(/([^\\])\*/g, '$1[^/]*')
-
-          // ? -> match any single char except slash
-          .replace(/\?/g, '[^/]');
-
-        const regex = new RegExp(regexPattern);
-        files = files.filter((file) => regex.test(file));
+        }
       }
 
       return {
@@ -165,11 +112,47 @@ export const fileListTool: Tool<
   },
 };
 
-// ============================================================================
-// Tool Export
-// ============================================================================
+/**
+ * Recursively get all files in a directory
+ */
+async function getAllFiles(
+  dir: string,
+  baseDir: string,
+  files: string[],
+  pattern: RegExp
+): Promise<void> {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    const relativePath = path.relative(baseDir, fullPath);
+
+    if (entry.isDirectory()) {
+      // Recurse into subdirectories
+      await getAllFiles(fullPath, baseDir, files, pattern);
+    } else if (entry.isFile()) {
+      // Check if file matches pattern
+      if (pattern.test(relativePath)) {
+        files.push(relativePath);
+      }
+    }
+  }
+}
 
 /**
- * All built-in tools
+ * Convert glob pattern to regex
+ * Handles glob patterns for file matching
  */
-export const builtInTools = [echoTool, getTimeTool, fileListTool] as const;
+function globToRegex(pattern: string): RegExp {
+  // Escape special regex characters except * and .
+  let regex = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&") // Escape special chars
+    .replace(/\./g, "\\.") // Escape dots
+    .replace(/^\*\*/g, ".*") // ** at start = match anything
+    .replace(/^\*/g, "[^/]*") // * at start = no slashes
+    .replace(/([^\\])\*/g, "$1[^/]*") // * in middle = no slashes
+    .replace(/\/\*\*/g, "/.*") // /**/ = match any depth
+    .replace(/\*\*/g, ".*"); // ** anywhere = match anything
+
+  return new RegExp(`^${regex}$`);
+}
