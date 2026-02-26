@@ -24,6 +24,13 @@ describe('MemoryManager', () => {
     }
   });
 
+  afterEach(() => {
+    // Clean up test file after each test
+    if (require('fs').existsSync(config.storagePath)) {
+      require('fs').unlinkSync(config.storagePath);
+    }
+  });
+
   describe('Constructor', () => {
     it('creates new memory if file does not exist', () => {
       const manager = new MemoryManager(config, mockLLMClient);
@@ -119,6 +126,93 @@ describe('MemoryManager', () => {
       expect(stats.recentCount).toBe(1);
       expect(stats.summaryCount).toBe(0);
       expect(stats.lastUpdated).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('Summarization', () => {
+    it('triggers summarization after 20 messages', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+
+      // Add 20 messages
+      for (let i = 0; i < 20; i++) {
+        await manager.addMessage({
+          role: 'user',
+          content: `Message ${i}`,
+          timestamp: new Date()
+        });
+      }
+
+      const stats = manager.getStats();
+      expect(stats.summaryCount).toBeGreaterThan(0);
+      expect(stats.recentCount).toBeLessThanOrEqual(15);
+    });
+
+    it('summarizes oldest 10 messages', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+
+      // Add 15 messages to fill recent messages
+      for (let i = 0; i < 15; i++) {
+        await manager.addMessage({
+          role: 'user',
+          content: `Message ${i}`,
+          timestamp: new Date()
+        });
+      }
+
+      // Add 5 more to trigger summarization (20 total)
+      for (let i = 15; i < 20; i++) {
+        await manager.addMessage({
+          role: 'user',
+          content: `Message ${i}`,
+          timestamp: new Date()
+        });
+      }
+
+      const stats = manager.getStats();
+      expect(stats.summaryCount).toBe(1);
+      expect(stats.recentCount).toBe(10); // 15 - 10 summarized + 5 new
+
+      // Verify summary was created with correct message count
+      const context = manager.getContext();
+      expect(context).toContain('Test summary');
+    });
+
+    it('prunes summaries when exceeding maxSummaries', async () => {
+      const smallConfig = { ...config, maxSummaries: 3 };
+      const manager = new MemoryManager(smallConfig, mockLLMClient);
+
+      // Add enough messages to create 4 summaries (20 * 4 = 80 messages)
+      for (let i = 0; i < 80; i++) {
+        await manager.addMessage({
+          role: 'user',
+          content: `Message ${i}`,
+          timestamp: new Date()
+        });
+      }
+
+      const stats = manager.getStats();
+      expect(stats.summaryCount).toBe(3); // Pruned to maxSummaries
+    });
+
+    it('handles summarization failure gracefully', async () => {
+      const failingClient = {
+        sendMessage: jest.fn().mockRejectedValue(new Error('API error'))
+      } as any;
+
+      const manager = new MemoryManager(config, failingClient);
+
+      // Add 20 messages to trigger summarization
+      for (let i = 0; i < 20; i++) {
+        await manager.addMessage({
+          role: 'user',
+          content: `Message ${i}`,
+          timestamp: new Date()
+        });
+      }
+
+      const stats = manager.getStats();
+      // Messages should be kept, not lost
+      expect(stats.recentCount).toBe(20);
     });
   });
 });

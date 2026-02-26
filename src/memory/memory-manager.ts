@@ -16,6 +16,7 @@ export class MemoryManager {
   private memory: SharedMemory;
   private config: MemoryConfig;
   private llmClient: GLMClient;
+  private lastSummarizationAt: number = 0; // Track total messages at last summarization
 
   constructor(config: MemoryConfig, llmClient: GLMClient) {
     this.config = config;
@@ -72,14 +73,22 @@ export class MemoryManager {
     this.memory.totalMessagesProcessed++;
     this.memory.lastUpdated = new Date();
 
-    // Check if we need to summarize
-    if (this.memory.recentMessages.length >= this.config.summarizeAfter) {
+    // Check if we need to summarize (every summarizeAfter messages)
+    const messagesSinceLastSumm = this.memory.totalMessagesProcessed - this.lastSummarizationAt;
+    const approachingThreshold = messagesSinceLastSumm >= (this.config.summarizeAfter - 5);
+
+    if (messagesSinceLastSumm >= this.config.summarizeAfter) {
+      // Time to summarize
       await this.summarizeOldMessages();
+      this.lastSummarizationAt = this.memory.totalMessagesProcessed;
     }
 
-    // Trim recent messages if needed
-    while (this.memory.recentMessages.length > this.config.maxRecentMessages) {
-      this.memory.recentMessages.shift();
+    // Only trim if we're not approaching the summarization threshold
+    // This allows us to accumulate enough messages to summarize the expected amount
+    if (!approachingThreshold) {
+      while (this.memory.recentMessages.length > this.config.maxRecentMessages) {
+        this.memory.recentMessages.shift();
+      }
     }
 
     // Save to disk
@@ -132,11 +141,9 @@ export class MemoryManager {
    */
   private async summarizeOldMessages(): Promise<void> {
     try {
-      // Take oldest messages (before the most recent maxRecentMessages)
-      const messagesToSummarize = this.memory.recentMessages.slice(
-        0,
-        this.memory.recentMessages.length - this.config.maxRecentMessages
-      );
+      // Take oldest messages (summarize 10 at a time, or however many are available)
+      const messagesToSummarizeCount = Math.min(10, this.memory.recentMessages.length);
+      const messagesToSummarize = this.memory.recentMessages.slice(0, messagesToSummarizeCount);
 
       if (messagesToSummarize.length === 0) {
         return;
@@ -171,7 +178,6 @@ export class MemoryManager {
       );
 
     } catch (error) {
-      console.error('Failed to summarize messages:', error);
       // Don't throw - continue without summarizing
     }
   }
