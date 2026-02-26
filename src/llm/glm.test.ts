@@ -14,7 +14,7 @@ describe("GLMClient", () => {
       const client = new GLMClient({
         apiKey: "test-key",
         baseURL: "https://api.example.com/v1/chat/completions",
-        model: "glm-4",
+        model: "glm-4.6",
       });
 
       expect(client).toBeDefined();
@@ -25,7 +25,7 @@ describe("GLMClient", () => {
         new GLMClient({
           apiKey: "",
           baseURL: "https://api.example.com/v1/chat/completions",
-          model: "glm-4",
+          model: "glm-4.6",
         });
       }).toThrow("API key is required");
     });
@@ -35,7 +35,7 @@ describe("GLMClient", () => {
         new GLMClient({
           apiKey: "test-key",
           baseURL: "",
-          model: "glm-4",
+          model: "glm-4.6",
         });
       }).toThrow("Base URL is required");
     });
@@ -61,7 +61,7 @@ describe("GLMClient", () => {
       const client = new GLMClient({
         apiKey: "test-key",
         baseURL: "https://api.example.com/v1/chat/completions",
-        model: "glm-4",
+        model: "glm-4.6",
       });
 
       const response = await client.sendMessage("Hello, GLM!");
@@ -84,7 +84,7 @@ describe("GLMClient", () => {
       const client = new GLMClient({
         apiKey: "invalid-key",
         baseURL: "https://api.example.com/v1/chat/completions",
-        model: "glm-4",
+        model: "glm-4.6",
       });
 
       await expect(client.sendMessage("Hello")).rejects.toThrow(

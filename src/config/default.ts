@@ -4,7 +4,7 @@ export const defaultConfig: Config = {
     agent: {
         provider: "anthropic",
         apiKey: "",
-        model: "claude-3-5-sonnet-20241022"
+        model: "glm-4.6"
     },
     channels: [],
     logLevel: "info"
