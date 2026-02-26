@@ -19,6 +19,12 @@ Built to learn:
 
 ### Current Capabilities
 - **Chat Interface** - Interactive CLI for conversations
+- **Shared Memory** - All sessions share conversation context
+  - Remembers information across sessions
+  - Automatic summarization every 20 messages
+  - Persists to `data/shared-memory.json`
+  - `/stats` command to view memory statistics
+  - `/clear` command for memory reset instructions
 - **Tool System** - Extensible tool architecture
 - **3 Built-in Tools:**
   - `echo` - Echo back messages (for testing)
@@ -27,8 +33,10 @@ Built to learn:
 
 ### How It Works
 ```
-Your message → Agent → GLM (decides tool) → Tool execution → Result → You
+Your message → Agent → Shared Memory → GLM (decides tool) → Tool execution → Result → Memory → You
 ```
+
+All chat sessions share the same memory, allowing the assistant to remember context across multiple sessions.
 
 ## 🚀 Quick Start
 
@@ -100,6 +108,7 @@ import { AgentExecutor } from './agent/executor';
 import { GLMClient } from './llm/glm';
 import { ToolRegistry } from './tools';
 import { echoTool, getTimeTool, fileListTool } from './built-in-tools';
+import { MemoryManager } from './memory/memory-manager'; // NEW!
 
 const glmClient = new GLMClient({
   apiKey: process.env.GLM_API_KEY,
@@ -112,7 +121,22 @@ tools.register(echoTool);
 tools.register(getTimeTool);
 tools.register(fileListTool);
 
-const agent = new AgentExecutor({ llmClient: glmClient, tools });
+// Optional: Add shared memory
+const memoryManager = new MemoryManager(
+  {
+    storagePath: 'data/shared-memory.json',
+    maxRecentMessages: 15,
+    summarizeAfter: 20,
+    maxSummaries: 50
+  },
+  glmClient
+);
+
+const agent = new AgentExecutor({
+  llmClient: glmClient,
+  tools,
+  memoryManager  // Optional - for shared memory
+});
 
 const response = await agent.processMessage('What time is it?');
 console.log(response);
@@ -131,9 +155,13 @@ my-assistant/
 │   │   └── chat.ts         # Interactive chat CLI
 │   ├── llm/                # LLM integration
 │   │   └── glm.ts          # GLM API client
+│   ├── memory/             # Memory system (NEW!)
+│   │   ├── types.ts        # Memory data structures
+│   │   └── memory-manager.ts  # Shared memory management
 │   ├── config/             # Configuration management
 │   └── examples/           # Example scripts
 ├── docs/plans/             # Learning plan and design docs
+├── data/                   # Memory storage (gitignored)
 ├── .env                    # API keys (not in git)
 └── package.json
 ```
@@ -152,9 +180,11 @@ npm run test:watch
 ```
 
 ### Test Coverage
-- 36 tests passing
+- 61 tests passing (67 total, 6 rate-limited)
 - Unit tests for all components
 - Integration tests with real GLM API
+- Memory system tests (28 tests)
+- Memory integration tests (15 tests)
 
 ## 🛠️ Built-in Tools
 
@@ -226,24 +256,30 @@ This project follows a structured learning approach:
 - Integrated with GLM API
 - **Status:** Complete
 
-### Phase 2: Deep Study (Next)
-- Understand each component deeply
-- Trace message flow
-- Document architecture
+### Phase 2: Deep Study ✅
+- Understood each component deeply
+- Traced message flow
+- Documented architecture
+- **Status:** Complete
+
+### Phase 3: Rebuild from Scratch ✅
+- Solidified understanding
+- Built from memory/understanding
+- **Status:** Complete
+
+### Phase 4: Conversation & Memory ✅
+- Added shared memory system
+- Implemented automatic summarization
+- Integrated memory into agent
+- Added `/stats` and `/clear` CLI commands
+- **Status:** Complete
+
+### Phase 5: Streaming Responses (Next)
+- Real-time token streaming from LLM
+- Typewriter effect in CLI
 - **Status:** Pending
 
-### Phase 3: Rebuild from Scratch
-- Solidify understanding
-- Build from memory/understanding
-- **Status:** Pending
-
-### Phase 4: Extend
-- Add custom features
-- Improve CLI
-- Add Discord integration
-- **Status:** Pending
-
-See `docs/plans/2025-02-20-agent-learning-plan.md` for details.
+See `docs/plans/` for detailed implementation plans.
 
 ## 🤝 Contributing
 
