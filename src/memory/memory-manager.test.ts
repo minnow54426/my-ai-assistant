@@ -215,4 +215,74 @@ describe('MemoryManager', () => {
       expect(stats.recentCount).toBe(20);
     });
   });
+
+  describe('Persistence', () => {
+    it('saves memory to disk after each addMessage', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+      const fs = require('fs');
+
+      await manager.addMessage({
+        role: 'user',
+        content: 'Test message',
+        timestamp: new Date()
+      });
+
+      expect(fs.existsSync(config.storagePath)).toBe(true);
+    });
+
+    it('loads existing memory from disk', async () => {
+      const fs = require('fs');
+
+      // Create first manager and add message
+      const manager1 = new MemoryManager(config, mockLLMClient);
+      await manager1.addMessage({
+        role: 'user',
+        content: 'Persistent message',
+        timestamp: new Date('2026-02-26T10:00:00.000Z')
+      });
+
+      // Create second manager with same config
+      const manager2 = new MemoryManager(config, mockLLMClient);
+      const stats = manager2.getStats();
+
+      expect(stats.totalMessages).toBe(1);
+      expect(stats.recentCount).toBe(1);
+
+      const context = manager2.getContext();
+      expect(context).toContain('Persistent message');
+    });
+
+    it('handles corrupted file gracefully', async () => {
+      const fs = require('fs');
+
+      // Write invalid JSON
+      fs.writeFileSync(config.storagePath, 'invalid json');
+
+      const manager = new MemoryManager(config, mockLLMClient);
+      const stats = manager.getStats();
+
+      // Should create new empty memory
+      expect(stats.totalMessages).toBe(0);
+      expect(stats.recentCount).toBe(0);
+    });
+
+    it('preserves Date objects correctly', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+      const testDate = new Date('2026-02-26T10:30:00.000Z');
+
+      await manager.addMessage({
+        role: 'user',
+        content: 'Test',
+        timestamp: testDate
+      });
+
+      // Create new manager to load from disk
+      const manager2 = new MemoryManager(config, mockLLMClient);
+      const stats = manager2.getStats();
+
+      // Verify that the timestamp was preserved as a Date object
+      expect(stats.lastUpdated).toBeInstanceOf(Date);
+      expect(stats.lastUpdated.getTime()).toBeGreaterThan(0);
+    });
+  });
 });
