@@ -143,6 +143,12 @@ GLM_API_KEY=sk-xxxxxxxxxxxxxxxxxx
 GLM_URL=https://apis.iflow.cn/v1/chat/completions
 ```
 
+**Important API Limitations:**
+- iflow.cn API does NOT support `system` role messages (will return 500 errors)
+- Only use `user` role in messages array
+- Rate limit: 10 QPS (requests per second)
+- Model prefers Chinese responses by default
+
 Config file location: `~/.my-assistant/config.json`
 ```json
 {
