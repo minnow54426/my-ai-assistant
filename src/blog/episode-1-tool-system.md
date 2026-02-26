@@ -253,100 +253,55 @@ await tools.execute("non-existent", {});
 
 During development, I hit several bugs that taught me important lessons:
 
-### Bug #1: The Regex That Broke Tool Detection
+### Bug #1: Empty Tool Names
 
 **The Problem:**
-When I first tested the agent, it wouldn't use the `get-time` tool. The LLM would say "Using tool: get-time with params: {}" but nothing happened!
+I wondered what would happen if I registered a tool with an empty name.
 
-**The Investigation:**
-I added debug logging to trace what was happening:
+**What happened:**
 ```typescript
-console.log('[DEBUG] LLM Response:', response.content);
-// Output: "Using tool: get-time with params: {}"
-console.log('[DEBUG] Tool call detected:', toolCall);
-// Output: undefined
+const badTool: Tool<{}, string> = {
+  name: "",  // Empty name
+  // ...
+};
+tools.register(badTool);  // ✅ This works!
 ```
 
-The tool call was returning `undefined`!
+**What I learned:** The system doesn't validate tool names. Should it? Maybe, but for now it's fine - empty names would just be confusing to use. This is a trade-off between validation and simplicity.
 
-**The Bug:**
-```typescript
-// In executor.ts, the parsing regex:
-const toolPattern = /Using tool:\s*(\w+)\s+with params:\s*(\{.*\})/i;
-```
-
-`\w+` matches word characters (a-z, A-Z, 0-9, _) but **not hyphens!**
-
-So tool names like `get-time` and `file-list` were never detected.
-
-**The Fix:**
-```typescript
-// Changed to:
-const toolPattern = /Using tool:\s*([\w-]+)\s+with params:\s*(\{.*\})/i;
-//                            ^^^^^^ Added hyphen support
-```
-
-**Lesson:** Always test your regex patterns with your actual data, not made-up examples!
-
-### Bug #2: The Timezone Confusion
+### Bug #2: Duplicate Tool Names
 
 **The Problem:**
-The agent showed UTC time but I'm in Beijing (UTC+8). When I asked "What time is it?", it showed 1:41 AM but it was actually 9:41 AM!
+What if I accidentally register two tools with the same name?
 
-**The Investigation:**
+**What happened:**
 ```typescript
-// Original code:
-return new Date().toISOString();  // Returns UTC
-// Output: "2026-02-21T01:41:00.000Z"
+tools.register(tool1);  // name: "duplicate"
+tools.register(tool2);  // name: "duplicate"  // ❌ Throws error!
 ```
 
-**The Fix:**
-```typescript
-const now = new Date();
-// Add 8 hours for Beijing time (UTC+8)
-const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-return beijingTime.toISOString().replace('Z', '') + ' (Beijing Time, UTC+8)';
-```
+**Error:** `Tool already registered: duplicate`
 
-**Lesson:** Always consider timezone! Users expect their local time, not UTC.
+**What I learned:** The registry protects against duplicates. This is good! It prevents accidentally overwriting tools. The error message is clear and helpful.
 
-### Bug #3: The File-List That Found Nothing
+### Bug #3: Wrong Parameter Types
 
 **The Problem:**
-I asked the agent to "List TypeScript files in src" and it said: "I don't see any TypeScript files... The directory appears to be empty."
+What if I try to call a tool with the wrong parameters?
 
-But I knew there were 17 `.ts` files!
-
-**The Investigation:**
+**What happened:**
 ```typescript
-// Tool was only looking at top-level directory
-const entries = await fs.readdir(targetDir, { withFileTypes: true });
-let files = entries
-  .filter((entry) => entry.isFile())
-  .map((entry) => entry.name);
+const echoTool: Tool<{ message: string }, string> = {
+  execute: async (params) => `Echo: ${params.message}`
+};
+await tools.execute("echo", { wrongField: "test" });
 ```
 
-The `.ts` files were in subdirectories: `src/agent/`, `src/llm/`, etc.
+**TypeScript error:** `Property 'message' is missing in type '{ wrongField: string }' but required in type '{ message: string }'`
 
-**The Fix:**
-Made the search recursive by default:
-```typescript
-if (recursive) {
-  // Recurse into all subdirectories
-  const getAllFiles = async (dir: string, baseDir: string) => {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        await getAllFiles(fullPath, baseDir);  // Recurse!
-      } else if (entry.isFile()) {
-        files.push(relativePath);
-      }
-    }
-  };
-}
-```
+**What I learned:** TypeScript catches these bugs **at compile time**, not at runtime. I can't even run the code with wrong parameters. This is the power of generics!
 
-**Lesson:** When working with file systems, think about directory structures!
+**Note:** The timezone bug (Episode 2) and regex bug (Episode 3) are about tool implementation and agent execution - they're covered in those episodes.
 
 ## Key Takeaways
 
@@ -401,7 +356,7 @@ The tool system is the foundation - it defines what our agent CAN do. But someth
 - The bug in file-list pattern matching
 - What I learned about error handling
 
-**Episode 3 Preview:** Then we'll look at the Agent Executor - the "brain" that decides which tool to use and how to communicate with the GLM API.
+**Episode 3 Preview:** Then we'll look at the Agent Executor - the "brain" that decides which tool to use and how to communicate with the GLM API. The regex bug mentioned earlier (hyphens in tool names) is covered in detail in Episode 3, since it's about the executor, not the tool system.
 
 ## Resources
 

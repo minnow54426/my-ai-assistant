@@ -51,7 +51,7 @@ export const echoTool: Tool<{ message: string }, string> = {
   name: "echo",
   description: "Echoes back the message you send. Useful for testing.",
   parameters: {
-    type: "the object",
+    type: "object",
     properties: {
       message: {
         type: "string",
@@ -390,6 +390,109 @@ The tool assumes the pattern is valid. Since the LLM provides the pattern, it's 
 - For now, it's fine
 - Could add pagination in the future if needed
 
+## Real Bugs I Encountered
+
+During tool development, I hit several bugs that taught me important lessons:
+
+### Bug #1: The Timezone Confusion
+
+**The Problem:**
+The agent showed UTC time but I'm in Beijing (UTC+8). When I asked "What time is it?", it showed 1:41 AM but it was actually 9:41 AM!
+
+**The Investigation:**
+```typescript
+// Original code:
+return new Date().toISOString();  // Returns UTC
+// Output: "2026-02-21T01:41:00.000Z"
+```
+
+**The Fix:**
+```typescript
+const now = new Date();
+// Add 8 hours for Beijing time (UTC+8)
+const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+return beijingTime.toISOString().replace('Z', '') + ' (Beijing Time, UTC+8)';
+```
+
+**Lesson:** Always consider timezone! Users expect their local time, not UTC. Also, be explicit in your tool descriptions about which timezone you're using.
+
+### Bug #2: File-List Only Found Top-Level Files
+
+**The Problem:**
+I asked the agent to "List TypeScript files in src" and it said: "I don't see any TypeScript files... The directory appears to be empty."
+
+But I knew there were 17 `.ts` files in subdirectories like `src/agent/`, `src/llm/`, etc.
+
+**The Investigation:**
+```typescript
+// Tool was only looking at top-level directory
+const entries = await fs.readdir(targetDir, { withFileTypes: true });
+let files = entries
+  .filter((entry) => entry.isFile())
+  .map((entry) => entry.name);
+```
+
+The `.ts` files were in subdirectories:
+```
+src/
+├── agent/tools.ts          ← Here!
+├── llm/glm.ts             ← And here!
+├── cli/chat.ts            ← Also here!
+```
+
+**The Fix:**
+Made the search recursive by default:
+```typescript
+if (recursive) {
+  // Recurse into all subdirectories
+  const getAllFiles = async (dir: string, baseDir: string) => {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await getAllFiles(fullPath, baseDir);  // Recurse!
+      } else if (entry.isFile()) {
+        files.push(relativePath);
+      }
+    }
+  };
+}
+```
+
+**Lesson:** When working with file systems, think about directory structures! Most users expect recursive search by default.
+
+### Bug #3: Pattern Matching Didn't Work
+
+**The Problem:**
+When I tried to filter by `*.ts`, it returned nothing for files in subdirectories.
+
+**The Investigation:**
+```typescript
+// Pattern: *.ts
+const regex = new RegExp(".*\.ts$");
+files.filter((file) => regex.test(file));
+// Matches: tools.ts ✅
+// But NOT: agent/tools.ts ❌
+```
+
+The `.*` pattern only matches characters, not path separators.
+
+**The Fix:**
+Properly convert glob patterns to regex:
+```typescript
+// Handle different glob patterns:
+params.pattern
+  .replace(/\./g, '\\.')      // Escape dots
+  .replace(/^\*/g, '.*')      // * at start = match any path
+  .replace(/([^\\])\*/g, '$1[^/]*')  // * in middle = no slashes
+```
+
+So:
+- `*.ts` → matches `tools.ts`, `glm.ts` but NOT `agent/tools.ts` (slash)
+- `**/*.ts` → matches `agent/tools.ts`, `llm/glm.ts` (any depth)
+- `agent/*.ts` → matches `agent/tools.ts` (specific directory)
+
+**Lesson:** Glob patterns are subtle. Test your regex patterns with actual file paths, not made-up examples.
+
 ## Key Takeaways
 
 After building and debugging three tools, here's what stuck:
@@ -440,11 +543,11 @@ The tools are what the agent CAN do. But something needs to decide WHEN to use e
 **Episode 3 Preview:** The Agent Executor - the "brain" that:
 - Receives your message
 - Sends it to GLM with tool descriptions
-- Detects which tool to use
+- Detects which tool to use (including the regex bug for hyphenated tool names!)
 - Executes the tool
 - Returns a helpful response
 
-The agent executor is where everything comes together!
+The agent executor is where everything comes together! It's also where the regex bug (hyphens in tool names like `get-time`) was fixed - see Episode 3 for the full story.
 
 ## Resources
 

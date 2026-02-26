@@ -187,3 +187,10 @@ When adding new features:
 - **Simple JSON Schema** for tool parameters - No TypeBox or complex validation
 - **Map-based registry** - Simple and efficient tool storage
 - **Tool call format** - Text-based parsing, not structured function calling
+
+
+# User's note
+- Every time finish a task, update claude.md, readme.md, and 3 files in learn_record_file folder
+- Every time you edit the code, analyze whether we need to update the md files in blog folder
+- Remember that the whole repo is learn from openclaw and used to build my own ai assistant step by step
+- Keep the whole repo simple

@@ -87,6 +87,8 @@ export class AgentExecutor {
 Please provide a helpful, natural response to the user's question using this information.
 Do NOT mention using a tool or repeat the tool call format. Just answer naturally.
 
+IMPORTANT: You must respond in English only. Do not respond in Chinese or any other language. All responses must be in English.
+
 User's question: ${message}`;
 
         const finalResponse = await this.llmClient.sendMessage(followUpPrompt);
@@ -158,7 +160,9 @@ When you need to use a tool, format your response as:
 For example:
 "Using tool: echo with params: {"message":"hello"}"
 
-Always explain what you're doing before using a tool.`;
+Always explain what you're doing before using a tool.
+
+IMPORTANT: You must respond in English only. Do not respond in Chinese or any other language. All responses must be in English.`;
   }
 
   /**

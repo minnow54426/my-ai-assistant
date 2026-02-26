@@ -30,7 +30,7 @@ describe("AgentExecutor", () => {
         },
         required: ["message"],
       },
-      execute: async (params) => `Echo: ${params.message}`,
+      execute: async (params) => `Echo: ${(params as { message: string }).message}`,
     });
 
     tools.register({
