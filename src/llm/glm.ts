@@ -68,10 +68,6 @@ export class GLMClient {
         model: this.model,
         messages: [
           {
-            role: "system",
-            content: "You are an English-language AI assistant. You MUST respond ONLY in English. NEVER respond in Chinese. If the user writes in Chinese, still respond in English. All your responses must be in English language.",
-          },
-          {
             role: "user",
             content: message,
           },

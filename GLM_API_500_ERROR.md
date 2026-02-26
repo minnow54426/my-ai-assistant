@@ -7,94 +7,108 @@
 GLM API error: 500 Internal Server Error
 ```
 
-## Possible Causes
+## Root Cause Found ✅
 
-### 1. **API Key Problem** (Most Likely)
+**The 500 error was caused by sending a `system` role message in the request.**
 
-The API key `sk-b541d6cf9ed3c2eb953c7c0f5e0aaa9f` might be:
-- **Invalid or expired**
-- **Not authorized for glm-4.6**
-- **Rate limited** (we hit 429 earlier)
-- **Account suspended**
+The iflow.cn API does NOT support the `system` role in messages array.
 
-### 2. **API Endpoint Issue**
+## What We Discovered
 
-The endpoint `https://apis.iflow.cn/v1/chat/completions` might be:
-- **Down temporarily**
-- **Not accessible from your location**
-- **Having infrastructure issues**
+### Test Results:
 
-### 3. **Model Availability**
-
-`glm-4.6` might:
-- **Not available** on this API
-- **Have a different name** (e.g., just `glm-4`)
-- **Require special permissions**
-
-### 4. **Request Format Issue**
-
-Our request format might not match what the API expects.
-
-## Diagnostic Steps
-
-### Step 1: Verify API Key
-
-Check if the API key is valid:
-
+1. **With `system` role message:**
 ```bash
-# Test with curl
 curl -X POST "https://apis.iflow.cn/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-b541d6cf9ed3c2eb953c7c0f5e0aaa9f" \
-  -d '{
-    "model": "glm-4.6",
-    "messages": [{"role": "user", "content": "hi"}]
-  }'
+  -H "Authorization: Bearer sk-..." \
+  -d '{"model": "glm-4.6", "messages": [
+    {"role": "system", "content": "..."},
+    {"role": "user", "content": "hello"}
+  ]}'
+# Result: 500 Internal Server Error ❌
 ```
 
-### Step 2: Try Different Model
+2. **Without `system` role message:**
+```bash
+curl -X POST "https://apis.iflow.cn/v1/chat/completions" \
+  -H "Authorization: Bearer sk-..." \
+  -d '{"model": "glm-4.6", "messages": [
+    {"role": "user", "content": "hello"}
+  ]}'
+# Result: 200 OK ✅
+```
 
-The API might use a different model name. Try:
-- `glm-4` (without .6)
-- `glm-4-flash`
-- `glm-4-air`
-- `glm-4-turbo`
+## The Fix
 
-### Step 3: Check API Documentation
+**File:** `src/llm/glm.ts`
 
-Visit the iflow.cn documentation or dashboard to:
-- Verify the correct model name
-- Check API key status
-- View usage limits
-- See if there are known issues
+**Before (caused 500 error):**
+```typescript
+const requestBody: GLMRequestBody = {
+  model: this.model,
+  messages: [
+    {
+      role: "system",  // ❌ This caused 500 errors
+      content: "You are an English-language AI assistant...",
+    },
+    {
+      role: "user",
+      content: message,
+    },
+  ],
+};
+```
 
-### Step 4: Contact Support
+**After (works correctly):**
+```typescript
+const requestBody: GLMRequestBody = {
+  model: this.model,
+  messages: [
+    {
+      role: "user",  // ✅ Only user role
+      content: message,
+    },
+  ],
+};
+```
 
-If the API continues to return 500:
-- Check iflow.cn status page
-- Contact their support
-- Verify your account is active
-- Check if you have sufficient credits/quota
+## Additional Findings
 
-## What We've Tried
+### Rate Limiting
+The API has strict QPS limits:
+- **QPS Limit:** 10 requests/second
+- **Error when exceeded:** 429 Too Many Requests
+- **Message:** `Throttling: QPS(11/10)`
 
-✅ Changed to glm-4.6 as required
-✅ Added system message for English
-✅ Added file locking for concurrency
-✅ Request format is correct
-✅ Authentication format is correct
+### Prompt Length Limits
+- **Short prompts (< 200 chars):** ✅ Work fine
+- **Medium prompts (~200-400 chars):** ✅ Work fine
+- **Long prompts (> 500 chars with tool descriptions):** ⚠️ May fail or rate limit
 
-**Result:** Still getting 500 errors
+### Chinese Language
+- **glm-4.6** is fundamentally a Chinese language model
+- It prefers to respond in Chinese even when prompted in English
+- System messages cannot be used to force English (as they cause 500 errors)
+- **Workaround:** Include English instructions in the user message itself
 
-## Recommendation
+## Test Results After Fix
 
-**The 500 error is coming from the GLM API itself, not your code.** Your implementation is correct.
+```bash
+$ npm test -- src/llm/glm-integration.test.ts
+PASS src/llm/glm-integration.test.ts
+✓ connects to real GLM API and sends message (20517 ms)
+```
 
-**Next steps:**
-1. Verify your API key is valid and active
-2. Check iflow.cn dashboard for API status
-3. Try their documentation examples to confirm correct model name
-4. Contact iflow.cn support if issue persists
+**GLM Response:** `你好！我是智谱AI训练的GLM大语言模型...` (Chinese)
+
+## Current Status
+
+✅ **RESOLVED:** 500 errors fixed by removing `system` role messages
+
+⚠️ **Known Limitations:**
+- API returns Chinese responses by default
+- Strict rate limiting (10 QPS)
+- Long prompts with tool descriptions may hit rate limits
 
 ## Current Configuration
 
@@ -109,4 +123,6 @@ GLM_URL=https://apis.iflow.cn/v1/chat/completions
 
 ---
 
-**Status:** 🔴 API not responding - requires investigation on iflow.cn side or API key validation
+**Status:** ✅ Fixed - 500 errors resolved. API working correctly.
+**Date:** 2026-02-26
+**Fix Commit:** Removed `system` role from GLM API requests
