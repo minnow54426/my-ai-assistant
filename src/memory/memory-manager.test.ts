@@ -285,4 +285,91 @@ describe('MemoryManager', () => {
       expect(stats.lastUpdated.getTime()).toBeGreaterThan(0);
     });
   });
+
+  describe('Edge Cases', () => {
+    it('handles empty summaries in getContext', () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+      const context = manager.getContext();
+
+      expect(context).toContain('(none)');
+    });
+
+    it('preserves message order in recent messages', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+
+      await manager.addMessage({
+        role: 'user',
+        content: 'First',
+        timestamp: new Date('2026-02-26T10:00:00.000Z')
+      });
+
+      await manager.addMessage({
+        role: 'user',
+        content: 'Second',
+        timestamp: new Date('2026-02-26T10:01:00.000Z')
+      });
+
+      await manager.addMessage({
+        role: 'user',
+        content: 'Third',
+        timestamp: new Date('2026-02-26T10:02:00.000Z')
+      });
+
+      const context = manager.getContext();
+      const firstIndex = context.indexOf('First');
+      const secondIndex = context.indexOf('Second');
+      const thirdIndex = context.indexOf('Third');
+
+      expect(firstIndex).toBeLessThan(secondIndex);
+      expect(secondIndex).toBeLessThan(thirdIndex);
+    });
+
+    it('includes tool calls and results in messages', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+
+      await manager.addMessage({
+        role: 'assistant',
+        content: 'Getting time...',
+        timestamp: new Date(),
+        toolCall: {
+          name: 'get-time',
+          params: {}
+        },
+        toolResult: '2026-02-26T18:30:00.000Z'
+      });
+
+      const stats = manager.getStats();
+      expect(stats.recentCount).toBe(1);
+    });
+
+    it('handles system role messages', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+
+      await manager.addMessage({
+        role: 'system',
+        content: 'System initialization',
+        timestamp: new Date()
+      });
+
+      const stats = manager.getStats();
+      expect(stats.recentCount).toBe(1);
+    });
+
+    it('does not trigger summarization before threshold', async () => {
+      const manager = new MemoryManager(config, mockLLMClient);
+
+      // Add 19 messages (below threshold of 20)
+      for (let i = 0; i < 19; i++) {
+        await manager.addMessage({
+          role: 'user',
+          content: `Message ${i}`,
+          timestamp: new Date()
+        });
+      }
+
+      const stats = manager.getStats();
+      expect(stats.summaryCount).toBe(0);
+      expect(stats.recentCount).toBe(19);
+    });
+  });
 });
