@@ -1,15 +1,4 @@
 /**
- * Tool System for Agent
- *
- * Tools are the building blocks that give an agent capabilities.
- * Each tool has a name, description, parameter schema, and execute function.
- */
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/**
  * JSON Schema for tool parameters
  */
 export type ToolParameterSchema = {
@@ -19,109 +8,65 @@ export type ToolParameterSchema = {
 };
 
 /**
- * A tool that the agent can execute
- *
+ * Tool interface with type-safe input and output
  * @template T - Input parameter type
  * @template R - Return type
  */
-export interface Tool<T = Record<string, unknown>, R = unknown> {
-  /** Unique name for the tool */
+export interface Tool<T = unknown, R = unknown> {
   name: string;
-
-  /** Human-readable description of what the tool does */
   description: string;
-
-  /** JSON schema for validating parameters */
   parameters: ToolParameterSchema;
-
-  /** Function that executes the tool logic */
   execute: (params: T) => Promise<R>;
 }
 
 /**
- * Registry for managing available tools
+ * Registry for managing tools
  */
 export class ToolRegistry {
-  private tools: Map<string, Tool> = new Map();
+  private tools: Map<string, Tool<unknown, unknown>> = new Map();
 
   /**
-   * Register a new tool
-   *
-   * @param tool - The tool to register
-   * @throws {Error} If a tool with the same name already exists
+   * Register a tool
+   * @throws Error if tool with same name already exists
    */
-  register<T = Record<string, unknown>, R = unknown>(tool: Tool<T, R>): void {
+  register<T, R>(tool: Tool<T, R>): void {
     if (this.tools.has(tool.name)) {
       throw new Error(`Tool already registered: ${tool.name}`);
     }
-    this.tools.set(tool.name, tool as Tool);
+    this.tools.set(tool.name, tool as Tool<unknown, unknown>);
   }
 
   /**
    * Get a tool by name
-   *
-   * @param name - The tool name
-   * @returns The tool, or undefined if not found
+   * @returns Tool or undefined if not found
    */
-  get(name: string): Tool | undefined {
+  get(name: string): Tool<unknown, unknown> | undefined {
     return this.tools.get(name);
   }
 
   /**
-   * Check if a tool exists
-   *
-   * @param name - The tool name
-   * @returns True if the tool is registered
-   */
-  has(name: string): boolean {
-    return this.tools.has(name);
-  }
-
-  /**
    * Execute a tool by name
-   *
-   * @param name - The tool name
-   * @param params - Parameters to pass to the tool
-   * @returns The result of tool execution
-   * @throws {Error} If the tool is not found
+   * @throws Error if tool not found
    */
-  async execute<T = Record<string, unknown>, R = unknown>(
-    name: string,
-    params: T
-  ): Promise<R> {
-    const tool = this.get(name);
-
+  async execute<T, R>(name: string, params: T): Promise<R> {
+    const tool = this.tools.get(name);
     if (!tool) {
       throw new Error(`Tool not found: ${name}`);
     }
-
-    return (tool.execute as (params: T) => Promise<R>)(params);
+    return tool.execute(params) as Promise<R>;
   }
 
   /**
    * List all registered tools
-   *
-   * @returns Array of all registered tools
    */
-  list(): Tool[] {
+  list(): Tool<unknown, unknown>[] {
     return Array.from(this.tools.values());
   }
 
   /**
-   * Get names of all registered tools
-   *
-   * @returns Array of tool names
+   * List all tool names
    */
   listNames(): string[] {
     return Array.from(this.tools.keys());
-  }
-
-  /**
-   * Get the count of registered tools
-   *
-   * @returns Number of tools
-   */
-  count(): number {
-    return this.tools.size;
   }
 }
