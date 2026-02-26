@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import { withLock } from "./lock";
 
 // Public interfaces
 export interface GLMClientConfig {
@@ -60,48 +61,51 @@ export class GLMClient {
   }
 
   async sendMessage(message: string): Promise<GLMMessageResponse> {
-    // Step 1: Build request body
-    const requestBody: GLMRequestBody = {
-      model: this.model,
-      messages: [
-        {
-          role: "user",
-          content: message,
-        },
-      ],
-    };
-
-    // Step 2: Send POST request
-    const response = await fetch(this.baseURL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    // Step 3: Handle HTTP errors
-    if (!response.ok) {
-      throw new Error(`GLM API error: ${response.status} ${response.statusText}`);
-    }
-
-    // Step 4: Parse JSON response
-    const data = (await response.json()) as GLMResponse;
-
-    // Step 5: Check for custom error format (GLM API may return HTTP 200 with error body)
-    if ("status" in data && data.status !== "200") {
-      throw new Error(`GLM API error: ${data.msg || "Unknown error"} (status: ${data.status})`);
-    }
-
-    // Step 6: Check for success format
-    if ("choices" in data && data.choices[0]) {
-      return {
-        content: data.choices[0].message.content,
+    // Wrap entire API call in lock to respect concurrency limit
+    return withLock(async () => {
+      // Step 1: Build request body
+      const requestBody: GLMRequestBody = {
+        model: this.model,
+        messages: [
+          {
+            role: "user",
+            content: message,
+          },
+        ],
       };
-    }
 
-    // Step 7: Unexpected format
-    throw new Error(`Unexpected GLM API response format`);
+      // Step 2: Send POST request
+      const response = await fetch(this.baseURL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      // Step 3: Handle HTTP errors
+      if (!response.ok) {
+        throw new Error(`GLM API error: ${response.status} ${response.statusText}`);
+      }
+
+      // Step 4: Parse JSON response
+      const data = (await response.json()) as GLMResponse;
+
+      // Step 5: Check for custom error format (GLM API may return HTTP 200 with error body)
+      if ("status" in data && data.status !== "200") {
+        throw new Error(`GLM API error: ${data.msg || "Unknown error"} (status: ${data.status})`);
+      }
+
+      // Step 6: Check for success format
+      if ("choices" in data && data.choices[0]) {
+        return {
+          content: data.choices[0].message.content,
+        };
+      }
+
+      // Step 7: Unexpected format
+      throw new Error(`Unexpected GLM API response format`);
+    });
   }
 }
