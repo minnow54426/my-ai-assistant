@@ -5,11 +5,13 @@
  */
 
 import * as readline from "readline";
+import * as path from "path";
 import { AgentExecutor } from "../agent/executor";
 import { GLMClient } from "../llm/glm";
 import { ToolRegistry } from "../agent/tools";
 import { echoTool, getTimeTool, fileListTool } from "../agent/built-in-tools";
 import { loadConfig, getDefaultConfigPath } from "../config/load";
+import { MemoryManager } from "../memory/memory-manager";
 
 async function main() {
   // Load configuration
@@ -28,26 +30,43 @@ async function main() {
     model: config.agent.model,
   });
 
+  // Create memory manager with shared memory
+  const memoryPath = path.join(process.cwd(), 'data', 'shared-memory.json');
+  const memoryManager = new MemoryManager(
+    {
+      storagePath: memoryPath,
+      maxRecentMessages: 15,
+      summarizeAfter: 20,
+      maxSummaries: 50,
+    },
+    glmClient
+  );
+
   // Create tool registry with built-in tools
   const tools = new ToolRegistry();
   tools.register(echoTool);
   tools.register(getTimeTool);
   tools.register(fileListTool);
 
-  // Create agent executor
+  // Create agent executor with memory manager
   const agent = new AgentExecutor({
     llmClient: glmClient,
     tools,
+    memoryManager,
   });
 
   console.log("\n✅ Agent ready!");
+  console.log("\n📝 Memory is shared across all sessions");
   console.log("\nAvailable tools:");
   agent.listTools().forEach((toolName) => {
     console.log(`  - ${toolName}: ${agent.getToolDescription(toolName).split("\n")[0]}`);
   });
 
-  console.log("\n💡 Type 'exit' or 'quit' to exit");
-  console.log("💡 Type 'tools' to list available tools\n");
+  console.log("\n💡 Commands:");
+  console.log("  - 'exit' or 'quit' to exit");
+  console.log("  - 'tools' to list available tools");
+  console.log("  - '/stats' to show memory statistics");
+  console.log("  - '/clear' to learn about resetting memory\n");
 
   // Create readline interface
   const rl = readline.createInterface({
@@ -74,6 +93,30 @@ async function main() {
           console.log(`\n${agent.getToolDescription(toolName)}`);
         });
         console.log();
+        chat();
+        return;
+      }
+
+      // Check for /stats command
+      if (message.toLowerCase() === "/stats") {
+        const stats = memoryManager.getStats();
+        console.log("\n📊 Memory Statistics:");
+        console.log(`  Total messages processed: ${stats.totalMessages}`);
+        console.log(`  Recent messages: ${stats.recentCount}`);
+        console.log(`  Summaries: ${stats.summaryCount}`);
+        console.log(`  Last updated: ${stats.lastUpdated.toLocaleString()}`);
+        console.log();
+        chat();
+        return;
+      }
+
+      // Check for /clear command
+      if (message.toLowerCase() === "/clear") {
+        console.log("\nℹ️  Memory Management:");
+        console.log("  Memory is shared across all CLI sessions.");
+        console.log("  To reset memory, delete the file:");
+        console.log(`  ${memoryPath}`);
+        console.log("  Then restart this CLI.\n");
         chat();
         return;
       }
