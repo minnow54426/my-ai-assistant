@@ -194,3 +194,4 @@ When adding new features:
 - Every time you edit the code, analyze whether we need to update the md files in blog folder
 - Remember that the whole repo is learn from openclaw and used to build my own ai assistant step by step
 - Keep the whole repo simple
+- MUST use the model glm-4.6
