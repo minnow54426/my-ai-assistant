@@ -1,34 +1,33 @@
-/**
- * Agent Executor
- *
- * The "brain" of the agent that:
- * 1. Receives user messages
- * 2. Sends them to the LLM with tool descriptions
- * 3. Detects when LLM wants to use a tool
- * 4. Executes the tool
- * 5. Returns the result
- */
-
-import { GLMClient } from "../llm/glm";
 import { ToolRegistry } from "./tools";
+import { GLMClient } from "../llm/glm";
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
+/**
+ * Configuration for AgentExecutor
+ */
 export interface AgentExecutorConfig {
-  /** LLM client for generating responses */
   llmClient: GLMClient;
-  /** Registry of available tools */
   tools: ToolRegistry;
 }
 
-// ============================================================================
-// Agent Executor
-// ============================================================================
+/**
+ * Tool call representation
+ */
+export type ToolCall = {
+  name: string;
+  params: Record<string, unknown>;
+};
 
 /**
- * Agent executor - processes messages and manages tool execution
+ * AgentExecutor - The "brain" of the AI agent
+ *
+ * Orchestrates the flow between LLM and tools:
+ * 1. Receives user message
+ * 2. Sends to LLM with tool descriptions
+ * 3. Detects if LLM wants to use a tool
+ * 4. Executes tool if needed
+ * 5. Returns final response
+ *
+ * Design principle: Stateless - each message is processed independently
  */
 export class AgentExecutor {
   private llmClient: GLMClient;
@@ -41,50 +40,49 @@ export class AgentExecutor {
 
   /**
    * Process a user message through the agent
-   *
-   * @param message - The user's message
-   * @returns The agent's response
+   * Two-phase flow: Decision → Execution → Response
    */
   async processMessage(message: string): Promise<string> {
-    // Build system prompt with tool descriptions
+    // Step 1: Build system prompt with tool descriptions
     const systemPrompt = this.buildSystemPrompt();
 
-    // Build full prompt
+    // Step 2: Send to LLM
     const prompt = `${systemPrompt}\n\nUser: ${message}\nAssistant:`;
-
-    // Get response from LLM
     const response = await this.llmClient.sendMessage(prompt);
 
-    // Check if LLM wants to use a tool
+    // Step 3: Check if LLM wants to use a tool
     const toolCall = this.parseToolCall(response.content);
 
     if (toolCall) {
+      // Phase 2: Execute tool and get final response
+
       try {
-        // Execute the tool
+        // Step 4: Execute the tool
         const toolResult = await this.tools.execute(toolCall.name, toolCall.params);
 
-        // Send result back to LLM for final response
-        // IMPORTANT: Tell the LLM NOT to repeat the tool call, just respond with the result
+        // Step 5: Send result back to LLM for natural response
         const followUpPrompt = `You just used the ${toolCall.name} tool and got this result: ${JSON.stringify(toolResult)}
 
 Please provide a helpful, natural response to the user's question using this information.
 Do NOT mention using a tool or repeat the tool call format. Just answer naturally.
 
 User's question: ${message}`;
-        const finalResponse = await this.llmClient.sendMessage(followUpPrompt);
 
+        const finalResponse = await this.llmClient.sendMessage(followUpPrompt);
         return finalResponse.content;
       } catch (error) {
+        // Handle tool execution errors gracefully
         return `Error executing tool ${toolCall.name}: ${error instanceof Error ? error.message : "Unknown error"}`;
       }
     }
 
-    // No tool call, return LLM response directly
+    // No tool needed, return direct response
     return response.content;
   }
 
   /**
-   * Build system prompt with available tools
+   * Build system prompt with tool descriptions
+   * This tells the LLM what tools are available and how to use them
    */
   private buildSystemPrompt(): string {
     const toolDescriptions = this.tools
@@ -110,32 +108,36 @@ Always explain what you're doing before using a tool.`;
 
   /**
    * Parse tool call from LLM response
+   * Extracts tool name and parameters using regex
    *
-   * @param response - The LLM response text
-   * @returns Tool call if detected, undefined otherwise
+   * Format: "Using tool: <name> with params: <json>"
+   *
+   * Returns undefined if no tool call is detected
    */
   private parseToolCall(response: string): { name: string; params: Record<string, unknown> } | undefined {
-    // Pattern: "Using tool: <name> with params: <json>"
-    // Tool names can contain hyphens (e.g., get-time, file-list)
+    // Regex pattern to match tool calls
+    // Important: [\w-]+ supports hyphens in tool names (e.g., "get-time")
     const toolPattern = /Using tool:\s*([\w-]+)\s+with params:\s*(\{.*\})/i;
     const match = response.match(toolPattern);
 
-    if (match) {
-      const name = match[1];
-      try {
-        const params = JSON.parse(match[2]);
-        return { name, params };
-      } catch {
-        // Invalid JSON, return undefined
-        return undefined;
-      }
+    if (!match) {
+      return undefined;
     }
 
-    return undefined;
+    const name = match[1];
+    const paramsJson = match[2];
+
+    try {
+      const params = JSON.parse(paramsJson);
+      return { name, params };
+    } catch {
+      // Invalid JSON, return undefined
+      return undefined;
+    }
   }
 
   /**
-   * List available tool names
+   * List all available tool names
    */
   listTools(): string[] {
     return this.tools.listNames();
@@ -144,13 +146,11 @@ Always explain what you're doing before using a tool.`;
   /**
    * Get description for a specific tool
    */
-  getToolDescription(name: string): string {
-    const tool = this.tools.get(name);
-
+  getToolDescription(toolName: string): string {
+    const tool = this.tools.get(toolName);
     if (!tool) {
-      return `Tool not found: ${name}`;
+      return `Tool not found: ${toolName}`;
     }
-
-    return `${tool.name}: ${tool.description}\nParameters: ${JSON.stringify(tool.parameters, null, 2)}`;
+    return `${tool.name}: ${tool.description}`;
   }
 }
