@@ -6,12 +6,15 @@
 
 import * as readline from "readline";
 import * as path from "path";
+import * as os from "os";
 import { AgentExecutor } from "../agent/executor";
 import { GLMClient } from "../llm/glm";
 import { ToolRegistry } from "../agent/tools";
 import { echoTool, getTimeTool, fileListTool } from "../agent/built-in-tools";
+import { memorySearchTool, memoryGetTool } from "../agent/memory-tools";
 import { loadConfig, getDefaultConfigPath } from "../config/load";
-import { MemoryManager } from "../memory/memory-manager";
+import { MemorySystem } from "../memory/index";
+import { MockEmbeddingProvider } from "../memory/embeddings/mock-provider";
 
 async function main() {
   // Load configuration
@@ -30,33 +33,43 @@ async function main() {
     model: config.agent.model,
   });
 
-  // Create memory manager with shared memory
-  const memoryPath = path.join(process.cwd(), 'data', 'shared-memory.json');
-  const memoryManager = new MemoryManager(
-    {
-      storagePath: memoryPath,
-      maxRecentMessages: 15,
-      summarizeAfter: 20,
-      maxSummaries: 50,
+  // Create memory system
+  const workspaceDir = path.join(os.homedir(), '.my-assistant');
+  const memory = new MemorySystem({
+    workspaceDir,
+    provider: 'openai',
+    apiKey: process.env.OPENAI_API_KEY || 'mock-key',
+    embeddings: new MockEmbeddingProvider(), // Use mock for now, can be switched to OpenAI
+    search: {
+      vectorWeight: 0.7,
+      keywordWeight: 0.3
     },
-    glmClient
-  );
+    sync: {
+      onSearch: false, // Disabled for CLI
+      watch: false
+    }
+  });
 
-  // Create tool registry with built-in tools
+  await memory.initialize();
+
+  // Create tool registry with built-in tools and memory tools
   const tools = new ToolRegistry();
   tools.register(echoTool);
   tools.register(getTimeTool);
   tools.register(fileListTool);
+  tools.register(memorySearchTool(memory));
+  tools.register(memoryGetTool(memory));
 
-  // Create agent executor with memory manager
+  // Create agent executor
   const agent = new AgentExecutor({
     llmClient: glmClient,
     tools,
-    memoryManager,
   });
 
   console.log("\n✅ Agent ready!");
-  console.log("\n📝 Memory is shared across all sessions");
+  console.log("\n📝 Memory system: OpenClaw-style semantic memory");
+  console.log(`\n📁 Workspace: ${workspaceDir}`);
+
   console.log("\nAvailable tools:");
   agent.listTools().forEach((toolName) => {
     console.log(`  - ${toolName}: ${agent.getToolDescription(toolName).split("\n")[0]}`);
@@ -64,9 +77,7 @@ async function main() {
 
   console.log("\n💡 Commands:");
   console.log("  - 'exit' or 'quit' to exit");
-  console.log("  - 'tools' to list available tools");
-  console.log("  - '/stats' to show memory statistics");
-  console.log("  - '/clear' to learn about resetting memory\n");
+  console.log("  - 'tools' to list available tools\n");
 
   // Create readline interface
   const rl = readline.createInterface({
@@ -93,30 +104,6 @@ async function main() {
           console.log(`\n${agent.getToolDescription(toolName)}`);
         });
         console.log();
-        chat();
-        return;
-      }
-
-      // Check for /stats command
-      if (message.toLowerCase() === "/stats") {
-        const stats = memoryManager.getStats();
-        console.log("\n📊 Memory Statistics:");
-        console.log(`  Total messages processed: ${stats.totalMessages}`);
-        console.log(`  Recent messages: ${stats.recentCount}`);
-        console.log(`  Summaries: ${stats.summaryCount}`);
-        console.log(`  Last updated: ${stats.lastUpdated.toLocaleString()}`);
-        console.log();
-        chat();
-        return;
-      }
-
-      // Check for /clear command
-      if (message.toLowerCase() === "/clear") {
-        console.log("\nℹ️  Memory Management:");
-        console.log("  Memory is shared across all CLI sessions.");
-        console.log("  To reset memory, delete the file:");
-        console.log(`  ${memoryPath}`);
-        console.log("  Then restart this CLI.\n");
         chat();
         return;
       }
