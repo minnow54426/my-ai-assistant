@@ -1,6 +1,5 @@
 import { ToolRegistry } from "./tools";
 import { GLMClient } from "../llm/glm";
-import { MemoryManager } from "../memory/memory-manager";
 
 /**
  * Configuration for AgentExecutor
@@ -8,7 +7,6 @@ import { MemoryManager } from "../memory/memory-manager";
 export interface AgentExecutorConfig {
   llmClient: GLMClient;
   tools: ToolRegistry;
-  memoryManager?: MemoryManager; // Optional for backward compatibility
 }
 
 /**
@@ -30,17 +28,14 @@ export type ToolCall = {
  * 5. Returns final response
  *
  * Design principle: Stateless - each message is processed independently
- * Optional: MemoryManager provides conversation context when configured
  */
 export class AgentExecutor {
   private llmClient: GLMClient;
   private tools: ToolRegistry;
-  private memoryManager?: MemoryManager;
 
   constructor(config: AgentExecutorConfig) {
     this.llmClient = config.llmClient;
     this.tools = config.tools;
-    this.memoryManager = config.memoryManager;
   }
 
   /**
@@ -48,25 +43,8 @@ export class AgentExecutor {
    * Two-phase flow: Decision → Execution → Response
    */
   async processMessage(message: string): Promise<string> {
-    // Step 1: Add user message to memory (before processing)
-    if (this.memoryManager) {
-      await this.memoryManager.addMessage({
-        role: 'user',
-        content: message,
-        timestamp: new Date()
-      });
-    }
-
-    // Step 2: Build system prompt with tool descriptions
     const systemPrompt = this.buildSystemPrompt();
-
-    // Step 3: Get memory context if available
-    const memoryContext = this.memoryManager ? this.memoryManager.getContext() : '';
-
-    // Step 4: Build full prompt with memory context
-    const prompt = memoryContext
-      ? `${systemPrompt}\n\n${memoryContext}\n\nUser: ${message}\nAssistant:`
-      : `${systemPrompt}\n\nUser: ${message}\nAssistant:`;
+    const prompt = `${systemPrompt}\n\nUser: ${message}\nAssistant:`;
 
     // Step 5: Send to LLM
     const response = await this.llmClient.sendMessage(prompt);
@@ -93,44 +71,12 @@ User's question: ${message}`;
 
         const finalResponse = await this.llmClient.sendMessage(followUpPrompt);
 
-        // Step 9: Add assistant response with tool call to memory
-        if (this.memoryManager) {
-          await this.memoryManager.addMessage({
-            role: 'assistant',
-            content: finalResponse.content,
-            timestamp: new Date(),
-            toolCall: toolCall,
-            toolResult: toolResult
-          });
-        }
-
-        return finalResponse.content;
+    return finalResponse.content;
       } catch (error) {
         // Handle tool execution errors gracefully
         const errorMessage = `Error executing tool ${toolCall.name}: ${error instanceof Error ? error.message : "Unknown error"}`;
-
-        // Add error to memory
-        if (this.memoryManager) {
-          await this.memoryManager.addMessage({
-            role: 'assistant',
-            content: errorMessage,
-            timestamp: new Date(),
-            toolCall: toolCall,
-            toolResult: error instanceof Error ? error.message : "Unknown error"
-          });
-        }
-
         return errorMessage;
       }
-    }
-
-    // Step 10: Add assistant response to memory (no tool call)
-    if (this.memoryManager) {
-      await this.memoryManager.addMessage({
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date()
-      });
     }
 
     // No tool needed, return direct response
