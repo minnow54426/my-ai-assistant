@@ -96,6 +96,9 @@ export class MemorySystem {
     const content = await this.fileStore.readFile(file.path);
     const chunks = this.chunker.chunk(content);
 
+    // Add file first for foreign key constraint
+    await this.db.addFile(file);
+
     const texts = chunks.map(c => c.text);
     const embeddings = await this.embeddings.embedBatch(texts);
 
@@ -111,6 +114,5 @@ export class MemorySystem {
     }));
 
     await this.db.addChunks(records);
-    await this.db.addFile(file);
   }
 }
