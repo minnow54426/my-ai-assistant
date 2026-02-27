@@ -19,24 +19,28 @@ Built to learn:
 
 ### Current Capabilities
 - **Chat Interface** - Interactive CLI for conversations
-- **Shared Memory** - All sessions share conversation context
-  - Remembers information across sessions
-  - Automatic summarization every 20 messages
-  - Persists to `data/shared-memory.json`
-  - `/stats` command to view memory statistics
-  - `/clear` command for memory reset instructions
+- **Semantic Memory System** - OpenClaw-style retrieval-augmented memory
+  - File-based storage: `MEMORY.md` for long-term knowledge
+  - Daily logs: `memory/YYYY-MM-DD.md` for temporary notes
+  - Hybrid search: Vector embeddings (0.7) + keyword search (0.3)
+  - Advanced features: MMR re-ranking, temporal decay (30-day half-life)
+  - Embedding cache to avoid re-computation
+  - Workspace: `~/.my-assistant/`
 - **Tool System** - Extensible tool architecture
-- **3 Built-in Tools:**
-  - `echo` - Echo back messages (for testing)
-  - `get-time` - Returns current Beijing time (UTC+8)
-  - `file-list` - List files in directories (recursive)
+  - Agent can search memory and retrieve relevant context
+  - 5 Built-in Tools:
+    - `echo` - Echo back messages (for testing)
+    - `get-time` - Returns current Beijing time (UTC+8)
+    - `file-list` - List files in directories (recursive)
+    - `memory_search` - Semantic search across all memories
+    - `memory_get` - Read specific memory files
 
 ### How It Works
 ```
-Your message → Agent → Shared Memory → GLM (decides tool) → Tool execution → Result → Memory → You
+Your Message → Agent → Memory Search (optional) → GLM (decides tool/tool use) → Tool execution → Result → You
 ```
 
-All chat sessions share the same memory, allowing the assistant to remember context across multiple sessions.
+The agent can search its semantic memory when relevant context is needed, providing a mix of long-term facts and recent context.
 
 ## 🚀 Quick Start
 
@@ -64,9 +68,29 @@ cp .env.example .env
 Create a `.env` file in the project root:
 
 ```env
+# GLM API Configuration
 GLM_API_KEY=your-glm-api-key
 GLM_URL=https://your-glm-api-endpoint/v1/chat/completions
+
+# Optional: OpenAI Embeddings (for semantic memory)
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_BASE_URL=https://api.openai.com/v1
 ```
+
+### Memory System Setup
+
+The semantic memory system creates a workspace at `~/.my-assistant/`:
+
+```bash
+~/.my-assistant/
+├── MEMORY.md              # Add long-term knowledge here
+└── memory/
+    └── 2025-02-27.md      # Daily logs (auto-created)
+```
+
+**Memory Types:**
+- **Long-term (`MEMORY.md`)**: Curated facts, preferences, decisions (never decays)
+- **Daily logs**: Running context, temporary notes (decays over 30 days)
 
 ### Run the Agent
 
@@ -99,6 +123,9 @@ Agent: hello world
 
 You: List TypeScript files in src
 Agent: There are 17 TypeScript files in the src directory...
+
+You: What did we discuss about Python?
+Agent: [Searches memory] We discussed that Python is a programming language you're learning...
 ```
 
 ### Programmatic Usage
@@ -108,7 +135,8 @@ import { AgentExecutor } from './agent/executor';
 import { GLMClient } from './llm/glm';
 import { ToolRegistry } from './tools';
 import { echoTool, getTimeTool, fileListTool } from './built-in-tools';
-import { MemoryManager } from './memory/memory-manager'; // NEW!
+import { MemorySystem } from './memory/index';
+import { MockEmbeddingProvider } from './memory/embeddings/mock-provider';
 
 const glmClient = new GLMClient({
   apiKey: process.env.GLM_API_KEY,
@@ -121,24 +149,34 @@ tools.register(echoTool);
 tools.register(getTimeTool);
 tools.register(fileListTool);
 
-// Optional: Add shared memory
-const memoryManager = new MemoryManager(
-  {
-    storagePath: 'data/shared-memory.json',
-    maxRecentMessages: 15,
-    summarizeAfter: 20,
-    maxSummaries: 50
+// Optional: Add semantic memory system
+const memory = new MemorySystem({
+  workspaceDir: '~/.my-assistant',
+  provider: 'openai',  // or 'configurable' for your own API
+  apiKey: process.env.OPENAI_API_KEY,
+  embeddings: new MockEmbeddingProvider(),  // or OpenAIEmbeddingProvider
+  search: {
+    vectorWeight: 0.7,
+    keywordWeight: 0.3
   },
-  glmClient
-);
+  sync: {
+    onSearch: true,
+    watch: false
+  }
+});
+
+// Register memory tools
+tools.register(memorySearchTool(memory));
+tools.register(memoryGetTool(memory));
+
+await memory.initialize();
 
 const agent = new AgentExecutor({
   llmClient: glmClient,
   tools,
-  memoryManager  // Optional - for shared memory
 });
 
-const response = await agent.processMessage('What time is it?');
+const response = await agent.processMessage('What did we discuss about Python?');
 console.log(response);
 ```
 
@@ -150,18 +188,36 @@ my-assistant/
 │   ├── agent/              # Agent system
 │   │   ├── executor.ts     # Agent "brain" - processes messages
 │   │   ├── tools.ts        # Tool interface and registry
-│   │   └── built-in-tools.ts  # Built-in tools
+│   │   ├── built-in-tools.ts  # Built-in tools (echo, get-time, file-list)
+│   │   └── memory-tools.ts     # Memory tools (memory_search, memory_get)
 │   ├── cli/                # Command-line interface
 │   │   └── chat.ts         # Interactive chat CLI
 │   ├── llm/                # LLM integration
 │   │   └── glm.ts          # GLM API client
-│   ├── memory/             # Memory system (NEW!)
-│   │   ├── types.ts        # Memory data structures
-│   │   └── memory-manager.ts  # Shared memory management
+│   ├── memory/             # Semantic memory system (OpenClaw-style)
+│   │   ├── types.ts        # Memory interfaces
+│   │   ├── index.ts        # MemorySystem orchestrator
+│   │   ├── storage/        # File + database storage
+│   │   │   ├── database.ts  # SQLite with FTS5
+│   │   │   ├── file-store.ts # Markdown file management
+│   │   │   └── schema.ts    # DB schema
+│   │   ├── embeddings/     # Embedding providers
+│   │   │   ├── provider.ts # Interface
+│   │   │   ├── mock-provider.ts # Testing
+│   │   │   ├── openai.ts   # OpenAI API
+│   │   │   └── configurable.ts # Custom API
+│   │   ├── search/         # Search algorithms
+│   │   │   ├── vector.ts   # Cosine similarity
+│   │   │   ├── keyword.ts  # BM25 keyword search
+│   │   │   ├── hybrid.ts   # Result merging
+│   │   │   ├── mmr.ts      # MMR re-ranking
+│   │   │   └── temporal-decay.ts # Time-based scoring
+│   │   └── chunking/       # Text processing
+│   │       └── chunker.ts  # Text chunking with overlap
 │   ├── config/             # Configuration management
 │   └── examples/           # Example scripts
 ├── docs/plans/             # Learning plan and design docs
-├── data/                   # Memory storage (gitignored)
+├── data/                   # Legacy memory storage (gitignored)
 ├── .env                    # API keys (not in git)
 └── package.json
 ```
@@ -180,11 +236,14 @@ npm run test:watch
 ```
 
 ### Test Coverage
-- 61 tests passing (67 total, 6 rate-limited)
+- 62 tests passing
 - Unit tests for all components
 - Integration tests with real GLM API
-- Memory system tests (28 tests)
-- Memory integration tests (15 tests)
+- Memory system tests: 24 tests covering all modules
+  - Storage layer (database, file-store)
+  - Embedding providers (mock, OpenAI, configurable)
+  - Search algorithms (vector, keyword, hybrid, MMR, decay)
+  - Chunking and orchestration
 
 ## 🛠️ Built-in Tools
 
@@ -214,7 +273,93 @@ Tool Result: { directory: 'src', files: [...], count: 17 }
 Agent Response: There are 17 TypeScript files in the src directory.
 ```
 
-## 🔧 Adding New Tools
+### Memory Search Tool
+Semantic search across all stored memories.
+
+```
+User: What did we discuss about Python?
+Tool Result: { results: [{ path: 'memory/2025-02-20.md', lines: '5-10', score: 0.92, snippet: 'Python is a programming language...' }], count: 1 }
+Agent Response: We discussed that Python is a programming language you're learning...
+```
+
+### Memory Get Tool
+Read specific memory files.
+
+```
+User: Read my MEMORY.md file
+Tool Result: { content: '# Long-term Knowledge\n\n## Project Goals\n...' }
+Agent Response: Here's what you have in your long-term memory...
+```
+
+## 🧠 Memory System
+
+The agent uses an OpenClaw-style semantic memory system for retrieval-augmented generation.
+
+### Architecture
+
+**Storage Layer:**
+- File-based: Markdown files in `~/.my-assistant/`
+- Database: SQLite with FTS5 full-text search
+- Embedding cache: Avoid re-computation
+
+**Search Algorithms:**
+- **Vector Search**: Cosine similarity on embeddings
+- **Keyword Search**: BM25 ranking on FTS5
+- **Hybrid Search**: Weighted merge (default: 0.7 vector + 0.3 keyword)
+- **MMR Re-ranking**: Reduces redundant results
+- **Temporal Decay**: Boosts recent memories (30-day half-life)
+
+**Memory Types:**
+- `MEMORY.md`: Long-term curated knowledge (never decays)
+- `memory/YYYY-MM-DD.md`: Daily logs (subject to temporal decay)
+
+### Usage
+
+The agent automatically searches memory when it needs context. You can also:
+
+1. **Add to memory manually:**
+   ```bash
+   # Edit ~/.my-assistant/MEMORY.md
+   echo "Important fact I want to remember" >> ~/.my-assistant/memory/$(date +%Y-%m-%d).md
+   ```
+
+2. **Search via agent:**
+   ```
+   You: What do you remember about my project?
+   Agent: [Searches memory] Based on your memory, you're building an AI assistant to learn...
+   ```
+
+3. **Memory decay:** Daily memories automatically decay over 30 days
+   - Today: 100% relevance
+   - 30 days: 50% relevance
+   - 90 days: 12.5% relevance
+
+### Configuration
+
+To use real embeddings (instead of mock):
+
+```typescript
+import { OpenAIEmbeddingProvider } from '../memory/embeddings/openai';
+
+embeddings: new OpenAIEmbeddingProvider({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL,
+  model: 'text-embedding-3-small'  // or 'text-embedding-3-large'
+})
+```
+
+To use your custom embedding model:
+
+```typescript
+import { ConfigurableEmbeddingProvider } from '../memory/embeddings/configurable';
+
+embeddings: new ConfigurableEmbeddingProvider({
+  apiKey: process.env.YOUR_API_KEY,
+  url: process.env.YOUR_EMBEDDING_URL,
+  model: 'your-model-name',
+  dimensions: 1536
+})
+```
 
 Create a new tool in `src/agent/built-in-tools.ts`:
 
@@ -267,16 +412,17 @@ This project follows a structured learning approach:
 - Built from memory/understanding
 - **Status:** Complete
 
-### Phase 4: Conversation & Memory ✅
-- Added shared memory system
-- Implemented automatic summarization
-- Integrated memory into agent
-- Added `/stats` and `/clear` CLI commands
+### Phase 4: Semantic Memory ✅
+- Replaced conversation-based memory with OpenClaw-style semantic memory
+- Implemented file-based storage (Markdown files)
+- Added hybrid search: vector embeddings + BM25 keyword
+- Implemented advanced features: MMR re-ranking, temporal decay
+- Created memory tools for agent (memory_search, memory_get)
 - **Status:** Complete
 
-### Phase 5: Streaming Responses (Next)
-- Real-time token streaming from LLM
-- Typewriter effect in CLI
+### Phase 5: Custom Embedding Model (Next)
+- Integrate custom embedding model (user-provided)
+- Replace OpenAI embeddings with your own API
 - **Status:** Pending
 
 See `docs/plans/` for detailed implementation plans.
