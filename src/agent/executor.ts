@@ -100,6 +100,21 @@ User's question: ${message}`;
 
 ${toolDescriptions}
 
+**Memory Tools Available:**
+- memory_search: Search your semantic memory for relevant information
+- memory_get: Read specific memory files (e.g., MEMORY.md or daily logs)
+
+**When to use memory:**
+- When user says "remember" or "store this"
+- When user asks about past conversations or preferences
+- When user references information discussed previously
+
+**Memory System Info:**
+- Location: ~/.my-assistant/
+- MEMORY.md: Long-term knowledge and preferences
+- memory/YYYY-MM-DD.md: Daily conversation logs
+- Uses semantic search (embeddings + keywords)
+
 When you need to use a tool, format your response as:
 "Using tool: <tool_name> with params: <json_params>"
 
