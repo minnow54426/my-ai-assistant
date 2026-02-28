@@ -209,16 +209,19 @@ Required `.env` file:
 GLM_API_KEY=sk-xxxxxxxxxxxxxxxxxx
 GLM_URL=https://apis.iflow.cn/v1/chat/completions
 
-# Optional: For semantic memory with OpenAI embeddings
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxx
-OPENAI_BASE_URL=https://api.openai.com/v1
-
-# Optional: Your custom embedding API
-EMBEDDING_API_KEY=xxx
-EMBEDDING_URL=https://your-api.com/embeddings
-EMBEDDING_MODEL=your-model-name
-EMBEDDING_DIMENSIONS=1536
+# Embedding Model Configuration (for semantic memory)
+EMBEDDING_API_KEY=your-embedding-api-key
+EMBEDDING_URL=https://open.bigmodel.cn/api/anthropic
+EMBEDDING_MODEL=embedding-3-pro
+EMBEDDING_DIMENSIONS=1024
 ```
+
+**Current Configuration (Phase 5):**
+- Embedding provider: Configurable (custom API)
+- Model: embedding-3-pro
+- API URL: https://open.bigmodel.cn/api/anthropic
+- Dimensions: 1024
+- API Key: Loaded from `EMBEDDING_API_KEY` (kept secret, never in code)
 
 **Important API Limitations:**
 - iflow.cn API does NOT support `system` role messages (will return 500 errors)
@@ -247,6 +250,14 @@ Memory workspace location: `~/.my-assistant/`
 └── memory.db                    # SQLite database (auto-generated)
 ```
 
+**Embedding Configuration (Phase 5):**
+- Provider: Configurable (custom API)
+- Model: embedding-3-pro
+- API URL: https://open.bigmodel.cn/api/anthropic
+- Dimensions: 1024
+- Configuration: Via environment variables (see `.env`)
+- Security: API key loaded at runtime, never stored in code
+
 ## Learning Project Context
 
 This is a 5-phase learning journey:
@@ -255,7 +266,7 @@ This is a 5-phase learning journey:
 - **Phase 2** (Complete): Deep Study - Understanding via blog writing (see `src/blog/`)
 - **Phase 3** (Complete): Rebuild from Scratch - Solidify understanding
 - **Phase 4** (Complete): Semantic Memory - OpenClaw-style memory with hybrid search
-- **Phase 5** (In Progress): Custom Embedding - Integrate your own embedding model
+- **Phase 5** (Complete): Custom Embedding - Integrated embedding-3-pro model
 
 See `docs/plans/2025-02-20-agent-learning-plan.md` for the full learning plan.
 

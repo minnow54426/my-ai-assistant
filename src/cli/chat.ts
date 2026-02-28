@@ -14,7 +14,7 @@ import { echoTool, getTimeTool, fileListTool } from "../agent/built-in-tools";
 import { memorySearchTool, memoryGetTool } from "../agent/memory-tools";
 import { loadConfig, getDefaultConfigPath } from "../config/load";
 import { MemorySystem } from "../memory/index";
-import { MockEmbeddingProvider } from "../memory/embeddings/mock-provider";
+import { ConfigurableEmbeddingProvider } from "../memory/embeddings/configurable";
 
 async function main() {
   // Load configuration
@@ -35,17 +35,33 @@ async function main() {
 
   // Create memory system
   const workspaceDir = path.join(os.homedir(), '.my-assistant');
+
+  // Configure embedding provider from environment variables
+  const embeddingApiKey = process.env.EMBEDDING_API_KEY;
+  const embeddingUrl = process.env.EMBEDDING_URL;
+  const embeddingModel = process.env.EMBEDDING_MODEL || 'embedding-3-pro';
+  const embeddingDimensions = parseInt(process.env.EMBEDDING_DIMENSIONS || '1024');
+
   const memory = new MemorySystem({
     workspaceDir,
-    provider: 'openai',
-    apiKey: process.env.OPENAI_API_KEY || 'mock-key',
-    embeddings: new MockEmbeddingProvider(), // Use mock for now, can be switched to OpenAI
+    provider: 'configurable',
+    apiKey: embeddingApiKey || '',
+    baseURL: embeddingUrl,
+    embeddingModel,
+    embeddingDimensions,
+    embeddingURL: embeddingUrl,
+    embeddings: embeddingApiKey ? new ConfigurableEmbeddingProvider({
+      apiKey: embeddingApiKey,
+      url: embeddingUrl || '',
+      model: embeddingModel,
+      dimensions: embeddingDimensions
+    }) : null,
     search: {
       vectorWeight: 0.7,
       keywordWeight: 0.3
     },
     sync: {
-      onSearch: false, // Disabled for CLI
+      onSearch: true, // Enable auto-sync for CLI
       watch: false
     }
   });
@@ -69,6 +85,12 @@ async function main() {
   console.log("\n✅ Agent ready!");
   console.log("\n📝 Memory system: OpenClaw-style semantic memory");
   console.log(`\n📁 Workspace: ${workspaceDir}`);
+
+  if (embeddingApiKey) {
+    console.log("\n🧠 Embeddings: " + embeddingModel + " @ " + embeddingUrl);
+  } else {
+    console.log("\n⚠️  Embeddings: Not configured (set EMBEDDING_API_KEY in .env)");
+  }
 
   console.log("\nAvailable tools:");
   agent.listTools().forEach((toolName) => {

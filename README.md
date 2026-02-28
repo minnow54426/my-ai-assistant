@@ -72,10 +72,14 @@ Create a `.env` file in the project root:
 GLM_API_KEY=your-glm-api-key
 GLM_URL=https://your-glm-api-endpoint/v1/chat/completions
 
-# Optional: OpenAI Embeddings (for semantic memory)
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_BASE_URL=https://api.openai.com/v1
+# Embedding Model Configuration (for semantic memory)
+EMBEDDING_API_KEY=your-embedding-api-key
+EMBEDDING_URL=https://open.bigmodel.cn/api/anthropic
+EMBEDDING_MODEL=embedding-3-pro
+EMBEDDING_DIMENSIONS=1024
 ```
+
+**Note:** The actual API keys are already configured in `.env`. Never commit real API keys to git. Use `.env.example` as a template.
 
 ### Memory System Setup
 
@@ -84,13 +88,21 @@ The semantic memory system creates a workspace at `~/.my-assistant/`:
 ```bash
 ~/.my-assistant/
 ├── MEMORY.md              # Add long-term knowledge here
-└── memory/
-    └── 2025-02-27.md      # Daily logs (auto-created)
+├── memory/
+│   └── 2025-02-27.md      # Daily logs (auto-created)
+└── memory.db              # SQLite database (auto-generated)
 ```
 
 **Memory Types:**
 - **Long-term (`MEMORY.md`)**: Curated facts, preferences, decisions (never decays)
 - **Daily logs**: Running context, temporary notes (decays over 30 days)
+
+**Embedding Configuration:**
+- **Provider**: Configurable (custom embedding API)
+- **Model**: embedding-3-pro
+- **URL**: https://open.bigmodel.cn/api/anthropic
+- **Dimensions**: 1024
+- **API Key**: Loaded from `EMBEDDING_API_KEY` environment variable
 
 ### Run the Agent
 
@@ -136,7 +148,7 @@ import { GLMClient } from './llm/glm';
 import { ToolRegistry } from './tools';
 import { echoTool, getTimeTool, fileListTool } from './built-in-tools';
 import { MemorySystem } from './memory/index';
-import { MockEmbeddingProvider } from './memory/embeddings/mock-provider';
+import { ConfigurableEmbeddingProvider } from './memory/embeddings/configurable';
 
 const glmClient = new GLMClient({
   apiKey: process.env.GLM_API_KEY,
@@ -149,12 +161,21 @@ tools.register(echoTool);
 tools.register(getTimeTool);
 tools.register(fileListTool);
 
-// Optional: Add semantic memory system
+// Semantic memory system with custom embeddings
 const memory = new MemorySystem({
   workspaceDir: '~/.my-assistant',
-  provider: 'openai',  // or 'configurable' for your own API
-  apiKey: process.env.OPENAI_API_KEY,
-  embeddings: new MockEmbeddingProvider(),  // or OpenAIEmbeddingProvider
+  provider: 'configurable',
+  apiKey: process.env.EMBEDDING_API_KEY,
+  baseURL: process.env.EMBEDDING_URL,
+  embeddingModel: process.env.EMBEDDING_MODEL || 'embedding-3-pro',
+  embeddingDimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || '1024'),
+  embeddingURL: process.env.EMBEDDING_URL,
+  embeddings: new ConfigurableEmbeddingProvider({
+    apiKey: process.env.EMBEDDING_API_KEY,
+    url: process.env.EMBEDDING_URL,
+    model: process.env.EMBEDDING_MODEL || 'embedding-3-pro',
+    dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || '1024')
+  }),
   search: {
     vectorWeight: 0.7,
     keywordWeight: 0.3
@@ -336,30 +357,40 @@ The agent automatically searches memory when it needs context. You can also:
 
 ### Configuration
 
-To use real embeddings (instead of mock):
+To use your custom embedding model (embedding-3-pro):
 
-```typescript
-import { OpenAIEmbeddingProvider } from '../memory/embeddings/openai';
-
-embeddings: new OpenAIEmbeddingProvider({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL,
-  model: 'text-embedding-3-small'  // or 'text-embedding-3-large'
-})
+1. **Set up environment variables** in `.env`:
+```env
+EMBEDDING_API_KEY=your-embedding-api-key
+EMBEDDING_URL=https://open.bigmodel.cn/api/anthropic
+EMBEDDING_MODEL=embedding-3-pro
+EMBEDDING_DIMENSIONS=1024
 ```
 
-To use your custom embedding model:
+2. **The CLI automatically loads these** from `.env` and uses them for semantic memory.
 
+3. **API endpoint format** (for your reference):
 ```typescript
-import { ConfigurableEmbeddingProvider } from '../memory/embeddings/configurable';
+POST https://open.bigmodel.cn/api/anthropic
+Content-Type: application/json
+Authorization: Bearer <EMBEDDING_API_KEY>
 
-embeddings: new ConfigurableEmbeddingProvider({
-  apiKey: process.env.YOUR_API_KEY,
-  url: process.env.YOUR_EMBEDDING_URL,
-  model: 'your-model-name',
-  dimensions: 1536
-})
+{
+  "model": "embedding-3-pro",
+  "input": "your text here"
+}
 ```
+
+**Current configuration in this project:**
+- Model: `embedding-3-pro`
+- URL: `https://open.bigmodel.cn/api/anthropic`
+- Dimensions: 1024
+- API Key: Loaded from `EMBEDDING_API_KEY` environment variable
+
+**Security:**
+- API key is stored in `.env` (gitignored)
+- Never committed to version control
+- Loaded at runtime via `process.env.EMBEDDING_API_KEY`
 
 Create a new tool in `src/agent/built-in-tools.ts`:
 
@@ -420,10 +451,11 @@ This project follows a structured learning approach:
 - Created memory tools for agent (memory_search, memory_get)
 - **Status:** Complete
 
-### Phase 5: Custom Embedding Model (Next)
-- Integrate custom embedding model (user-provided)
-- Replace OpenAI embeddings with your own API
-- **Status:** Pending
+### Phase 5: Custom Embedding Model ✅
+- Integrated custom embedding model (embedding-3-pro)
+- Configured via environment variables (secure)
+- API endpoint: https://open.bigmodel.cn/api/anthropic
+- **Status:** Complete
 
 See `docs/plans/` for detailed implementation plans.
 
