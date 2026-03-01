@@ -27,11 +27,6 @@ export class MemoryDatabase {
     }
   }
 
-  getTables(): string[] {
-    const rows = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-    return rows.map(r => r.name);
-  }
-
   // File operations
   async addFile(file: MemoryFile): Promise<void> {
     const stmt = this.db.prepare(`
@@ -53,23 +48,6 @@ export class MemoryDatabase {
       hash: row.hash,
       mtime: row.mtime
     };
-  }
-
-  async getAllFiles(): Promise<MemoryFile[]> {
-    const stmt = this.db.prepare('SELECT * FROM files');
-    const rows = stmt.all() as any[];
-    return rows.map(row => ({
-      path: row.path,
-      type: row.type,
-      hash: row.hash,
-      mtime: row.mtime
-    }));
-  }
-
-  async removeFile(path: string): Promise<void> {
-    const stmt = this.db.prepare('DELETE FROM files WHERE path = ?');
-    stmt.run(path);
-    await this.clearPath(path);
   }
 
   // Chunk operations
@@ -129,25 +107,6 @@ export class MemoryDatabase {
 
     stmt1.run(path);
     stmt2.run(path);
-  }
-
-  // Embedding cache
-  async getCachedEmbedding(hash: string): Promise<Float32Array | undefined> {
-    const stmt = this.db.prepare('SELECT embedding FROM embedding_cache WHERE hash = ?');
-    const row = stmt.get(hash) as any;
-    if (!row) return undefined;
-
-    return new Float32Array(row.embedding.buffer);
-  }
-
-  async cacheEmbedding(hash: string, embedding: Float32Array, model: string): Promise<void> {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO embedding_cache (hash, embedding, model, created_at)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    const buffer = Buffer.from(embedding.buffer);
-    stmt.run(hash, buffer, model, Date.now());
   }
 
   close(): void {

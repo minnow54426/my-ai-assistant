@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a learning project to understand how AI agents work by building a minimal agent from scratch. The agent integrates with GLM-4.6 (ChatGLM) and uses a tool-based architecture for executing tasks.
 
-**Current State:** Phase 4 complete (OpenClaw-style semantic memory system), Phase 5 in progress (custom embedding model integration).
+**Current State:** Phase 5 complete (custom embedding model integration), Phase 6 complete (code cleanup and simplification).
 
 ## Essential Commands
 
@@ -16,7 +16,7 @@ This is a learning project to understand how AI agents work by building a minima
 # Install dependencies
 npm install
 
-# Run all tests (62 tests)
+# Run all tests (57 tests)
 npm test
 
 # Run specific test file
@@ -89,14 +89,11 @@ User Message → AgentExecutor → GLM Client → GLM API
 - `embeddings/` - Embedding providers
   - `provider.ts` - EmbeddingProvider interface
   - `mock-provider.ts` - Mock for testing
-  - `openai.ts` - OpenAI API integration
   - `configurable.ts` - Custom embedding API (for your model)
 - `search/` - Search algorithms
   - `vector.ts` - Cosine similarity search
   - `keyword.ts` - BM25 keyword search
   - `hybrid.ts` - Hybrid result merging
-  - `mmr.ts` - MMR re-ranking
-  - `temporal-decay.ts` - Time-based scoring
 - `chunking/` - Text processing
   - `chunker.ts` - Text chunking with overlap
 
@@ -106,9 +103,8 @@ User Message → AgentExecutor → GLM Client → GLM API
   - Supports custom baseURL for different providers
 
 **Configuration** (`src/config/`)
-- `types.ts` - Config interfaces (AgentConfig, ChannelConfig, Config)
+- `types.ts` - Config interfaces (AgentConfig, Config)
 - `load.ts` - Loads from `~/.my-assistant/config.json` and `.env`
-- `default.ts` - Default configuration values
 
 **CLI** (`src/cli/`)
 - `chat.ts` - Interactive readline-based chat interface with memory integration
@@ -147,21 +143,19 @@ This design allows the registry to handle tools with different parameter and ret
 ### Memory System Flow
 
 **File Storage:**
-- `~/.my-assistant/MEMORY.md` - Long-term curated knowledge (never decays)
-- `~/.my-assistant/memory/YYYY-MM-DD.md` - Daily logs (subject to temporal decay)
+- `~/.my-assistant/MEMORY.md` - Long-term curated knowledge
+- `~/.my-assistant/memory/YYYY-MM-DD.md` - Daily logs
 
 **Search Process:**
 1. Agent calls `memory_search` tool with query
 2. MemorySystem syncs changed files
 3. Text chunked into ~400 token chunks with 80 token overlap
-4. Chunks embedded (cached if previously seen)
+4. Chunks embedded
 5. Parallel search:
    - Vector search: Cosine similarity on embeddings
    - Keyword search: BM25 ranking on FTS5
 6. Results merged: `0.7 * vectorScore + 0.3 * keywordScore`
-7. Optional MMR re-ranking to reduce redundancy
-8. Optional temporal decay for daily memories
-9. Top results returned to agent
+7. Top results returned to agent
 
 ### Critical Implementation Details
 
@@ -191,15 +185,6 @@ This design allows the registry to handle tools with different parameter and ret
 - Weighted merge: `finalScore = 0.7 * vectorScore + 0.3 * keywordScore`
 - Parallel execution of vector and keyword searches
 - Results sorted by combined score
-
-**MMR Re-ranking** (`src/memory/search/mmr.ts`)
-- Formula: `λ * relevance - (1-λ) * max_similarity_to_selected`
-- Default λ: 0.7 (balanced relevance/diversity)
-- Reduces redundant results using Jaccard similarity
-
-**Temporal Decay** (`src/memory/search/temporal-decay.ts`)
-- Formula: `decayedScore = score * exp(-LN2 * ageInDays / halfLifeDays)`
-- Default half-life: 30 days (50% decay monthly)
 - Applies only to daily files, never to MEMORY.md
 
 ### Environment Configuration
@@ -260,13 +245,14 @@ Memory workspace location: `~/.my-assistant/`
 
 ## Learning Project Context
 
-This is a 5-phase learning journey:
+This is a 6-phase learning journey:
 
 - **Phase 1** (Complete): Extract & Run - Built minimal working agent
 - **Phase 2** (Complete): Deep Study - Understanding via blog writing (see `src/blog/`)
 - **Phase 3** (Complete): Rebuild from Scratch - Solidify understanding
 - **Phase 4** (Complete): Semantic Memory - OpenClaw-style memory with hybrid search
 - **Phase 5** (Complete): Custom Embedding - Integrated embedding-3-pro model
+- **Phase 6** (Complete): Code Cleanup - Removed unused code and simplified architecture
 
 See `docs/plans/2025-02-20-agent-learning-plan.md` for the full learning plan.
 
@@ -274,12 +260,12 @@ See `docs/plans/2025-02-20-agent-learning-plan.md` for the full learning plan.
 
 This project uses TDD (Test-Driven Development):
 - Tests written before implementation
-- 62 tests passing (unit + integration)
+- 57 tests passing (unit + integration)
 - Integration tests use real GLM API
-- Memory system: 24 tests covering all modules
+- Memory system tests covering all modules
   - Storage layer (database, file-store)
-  - Embeddings (mock, OpenAI, configurable)
-  - Search (vector, keyword, hybrid, MMR, decay)
+  - Embeddings (mock, configurable)
+  - Search (vector, keyword, hybrid)
   - Chunking and orchestration
 - Tests are in `*.test.ts` files alongside source code
 

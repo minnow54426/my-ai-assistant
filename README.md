@@ -23,8 +23,6 @@ Built to learn:
   - File-based storage: `MEMORY.md` for long-term knowledge
   - Daily logs: `memory/YYYY-MM-DD.md` for temporary notes
   - Hybrid search: Vector embeddings (0.7) + keyword search (0.3)
-  - Advanced features: MMR re-ranking, temporal decay (30-day half-life)
-  - Embedding cache to avoid re-computation
   - Workspace: `~/.my-assistant/`
 - **Tool System** - Extensible tool architecture
   - Agent can search memory and retrieve relevant context
@@ -94,8 +92,8 @@ The semantic memory system creates a workspace at `~/.my-assistant/`:
 ```
 
 **Memory Types:**
-- **Long-term (`MEMORY.md`)**: Curated facts, preferences, decisions (never decays)
-- **Daily logs**: Running context, temporary notes (decays over 30 days)
+- **Long-term (`MEMORY.md`)**: Curated facts, preferences, decisions
+- **Daily logs**: Running context, temporary notes
 
 **Embedding Configuration:**
 - **Provider**: Configurable (custom embedding API)
@@ -225,14 +223,11 @@ my-assistant/
 │   │   ├── embeddings/     # Embedding providers
 │   │   │   ├── provider.ts # Interface
 │   │   │   ├── mock-provider.ts # Testing
-│   │   │   ├── openai.ts   # OpenAI API
 │   │   │   └── configurable.ts # Custom API
 │   │   ├── search/         # Search algorithms
 │   │   │   ├── vector.ts   # Cosine similarity
 │   │   │   ├── keyword.ts  # BM25 keyword search
-│   │   │   ├── hybrid.ts   # Result merging
-│   │   │   ├── mmr.ts      # MMR re-ranking
-│   │   │   └── temporal-decay.ts # Time-based scoring
+│   │   │   └── hybrid.ts   # Result merging
 │   │   └── chunking/       # Text processing
 │   │       └── chunker.ts  # Text chunking with overlap
 │   ├── config/             # Configuration management
@@ -257,13 +252,13 @@ npm run test:watch
 ```
 
 ### Test Coverage
-- 62 tests passing
+- 57 tests passing
 - Unit tests for all components
 - Integration tests with real GLM API
-- Memory system tests: 24 tests covering all modules
+- Memory system tests covering all modules
   - Storage layer (database, file-store)
-  - Embedding providers (mock, OpenAI, configurable)
-  - Search algorithms (vector, keyword, hybrid, MMR, decay)
+  - Embedding providers (mock, configurable)
+  - Search algorithms (vector, keyword, hybrid)
   - Chunking and orchestration
 
 ## 🛠️ Built-in Tools
@@ -321,18 +316,15 @@ The agent uses an OpenClaw-style semantic memory system for retrieval-augmented 
 **Storage Layer:**
 - File-based: Markdown files in `~/.my-assistant/`
 - Database: SQLite with FTS5 full-text search
-- Embedding cache: Avoid re-computation
 
 **Search Algorithms:**
 - **Vector Search**: Cosine similarity on embeddings
 - **Keyword Search**: BM25 ranking on FTS5
 - **Hybrid Search**: Weighted merge (default: 0.7 vector + 0.3 keyword)
-- **MMR Re-ranking**: Reduces redundant results
-- **Temporal Decay**: Boosts recent memories (30-day half-life)
 
 **Memory Types:**
-- `MEMORY.md`: Long-term curated knowledge (never decays)
-- `memory/YYYY-MM-DD.md`: Daily logs (subject to temporal decay)
+- `MEMORY.md`: Long-term curated knowledge
+- `memory/YYYY-MM-DD.md`: Daily logs
 
 ### Usage
 
@@ -349,11 +341,6 @@ The agent automatically searches memory when it needs context. You can also:
    You: What do you remember about my project?
    Agent: [Searches memory] Based on your memory, you're building an AI assistant to learn...
    ```
-
-3. **Memory decay:** Daily memories automatically decay over 30 days
-   - Today: 100% relevance
-   - 30 days: 50% relevance
-   - 90 days: 12.5% relevance
 
 ### Configuration
 

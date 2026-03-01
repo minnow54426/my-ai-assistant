@@ -21,14 +21,6 @@ describe('MemoryDatabase', () => {
     }
   });
 
-  it('should create database and tables', () => {
-    const tables = db.getTables();
-    expect(tables).toContain('files');
-    expect(tables).toContain('chunks');
-    expect(tables).toContain('embedding_cache');
-    expect(tables).toContain('chunks_fts');
-  });
-
   it('should add and retrieve file', async () => {
     const file: MemoryFile = {
       path: 'MEMORY.md',

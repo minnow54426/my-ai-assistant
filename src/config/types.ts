@@ -5,14 +5,7 @@ export interface AgentConfig {
     baseURL?: string;  // For GLM and other custom endpoints
 }
 
-export interface ChannelConfig {
-    platform: "discord" | "slack";
-    token: string;
-    enabled: boolean;
-}
-
 export interface Config {
     agent: AgentConfig;
-    channels: ChannelConfig[];
     logLevel: "debug" | "info" | "warn" | "error";
 }

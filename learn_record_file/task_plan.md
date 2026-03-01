@@ -31,11 +31,27 @@ Phase 1: Extract & Run Minimal Agent
 - [ ] Verify rebuilt version works the same
 - **Status:** pending
 
-### Phase 4: Extend with Custom Features
-- [ ] Add Discord bot integration
-- [ ] Add custom tools
-- [ ] Improve CLI interface
-- **Status:** pending
+### Phase 4: Semantic Memory System
+- [x] Implemented OpenClaw-style semantic memory
+- [x] File-based storage (Markdown files)
+- [x] Hybrid search (vector + keyword)
+- [x] Memory tools for agent
+- **Status:** Complete
+
+### Phase 5: Custom Embedding Model
+- [x] Integrated embedding-3-pro model
+- [x] Configurable embedding provider
+- [x] Environment-based configuration
+- **Status:** Complete
+
+### Phase 6: Code Cleanup & Simplification
+- [x] Comprehensive code review with code-simplifier agent
+- [x] Removed unused types and interfaces
+- [x] Deleted unused modules (MMR, temporal decay, OpenAI provider)
+- [x] Cleaned up database schema and methods
+- [x] Fixed tests after cleanup
+- [x] Updated documentation
+- **Status:** Complete
 
 ## Key Questions
 1. What's the minimal set of components needed for a working agent?

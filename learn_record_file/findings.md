@@ -49,8 +49,47 @@ Agent → LLM (decides tool) → Tool Execution → Result → LLM → User
 - Abstract client interface allows switching
 - Prompts include tool definitions for function calling
 
+### [Phase 6] - Code Cleanup & Simplification
+*Date: 2026-03-01*
+
+**Finding 5: Unused Dead Code Accumulation**
+- Old memory system types (ConversationMessage, MemorySummary, SharedMemory, etc.) were superseded by new OpenClaw-style system but not removed
+- Lesson: When implementing new systems, proactively remove old abstractions
+- Impact: 70+ lines of confusing legacy types
+
+**Finding 6: Unused Features Never Integrated**
+- MMR re-ranking and temporal decay were implemented as modules but never wired into MemorySystem
+- Configuration options existed in MemorySystemConfig but were unused
+- Lesson: Either integrate features immediately or remove them; partial implementation creates confusion
+- Impact: 2 modules + tests deleted (~150 lines)
+
+**Finding 7: Multiple Embedding Providers**
+- Had OpenAIEmbeddingProvider and ConfigurableEmbeddingProvider
+- Only ConfigurableEmbeddingProvider was used in production code
+- Lesson: Keep YAGNI (You Aren't Gonna Need It) in mind - don't build flexibility until needed
+- Impact: Deleted entire openai.ts file
+
+**Finding 8: Database Schema vs Implementation Mismatch**
+- Schema defined embedding_cache table with methods (getCachedEmbedding, cacheEmbedding)
+- Methods existed but were never called
+- Lesson: Database schema should match actual usage; unused tables waste space and cause confusion
+- Impact: Removed cache table and 5 unused database methods
+
+**Finding 9: Configuration Bloat**
+- ChannelConfig for Discord/Slack integration was defined but never implemented
+- defaultConfig export existed but wasn't used by loadConfig
+- Lesson: Don't define interfaces for features you might add someday
+- Impact: Removed 2 unnecessary configuration files
+
+**Finding 10: Tests Can Hide Dead Code**
+- mmr.test.ts and temporal-decay.test.ts passed but tested code that was never called
+- Having passing tests doesn't mean code is being used
+- Lesson: Integration tests and code coverage analysis help identify unused code
+- Impact: Deleted 4 test files for unused modules
+
 ## To Investigate
-- [ ] How does the agent decide which tool to call?
-- [ ] What's the minimal prompt format needed?
-- [ ] How are tool results returned to the LLM?
-- [ ] What's the simplest agent configuration?
+- [x] How does the agent decide which tool to call? (Phase 1)
+- [x] What's the minimal prompt format needed? (Phase 1)
+- [x] How are tool results returned to the LLM? (Phase 1)
+- [x] What's the simplest agent configuration? (Phase 1)
+- [x] Code cleanup and simplification (Phase 6)

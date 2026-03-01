@@ -21,14 +21,6 @@ CREATE TABLE IF NOT EXISTS chunks (
   FOREIGN KEY (path) REFERENCES files(path)
 );
 
--- Embedding cache
-CREATE TABLE IF NOT EXISTS embedding_cache (
-  hash TEXT PRIMARY KEY,
-  embedding BLOB NOT NULL,
-  model TEXT NOT NULL,
-  created_at INTEGER NOT NULL
-);
-
 -- Full-text search table
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
   text, id UNINDEXED, path UNINDEXED
